@@ -1,371 +1,333 @@
-// Client_Socket.cpp : Defines the entry point for the console application.
-//
+#include <stdio.h>
+#include <iostream>
+#include <string>
+#include <ws2tcpip.h>
+#include <winsock2.h>
+#include "CodeStatus.h"
+#include "StreamTransmission.h"
 
-#include "stdafx.h"
-#include<string.h>
-#include<stdlib.h>
-#include<Winsock2.h>
-#include<WS2tcpip.h>
-#include<iostream>
-#include<queue>
-#include<sstream>
-#include "string"
-#include<stdio.h>
-using namespace std;
-//#define SERVER_PORT 5500
-//#define SERVER_ADDR "127.0.0.1"
-#define BUFF_SIZE 2048
 #pragma comment(lib, "Ws2_32.lib")
-//Initiating a queue to handle the stream problem
-std::queue<char*> msgs;
-//mark: Check to close the window(true) or not(false)
-bool markExist = false;
-//mark: logged in(true) or not(false)
-bool markLogIn = false;
-SOCKET client;
-// handle the stream problem
-//Add to queue
-void SolveStream(char s[])
-{
-	char *pch;
-	//The strtok function splits the user into the way the substring is associated with the separator "\r\n"
-	pch = strtok(s, "\r\n");
-	while (pch != NULL)
-	{
-		//Handle additional elements in the queue
-		msgs.push(pch);
-		pch = strtok(NULL, "\r\n");
+
+#define SERVER_ADDR "127.0.0.1"
+#define BUFF_SIZE 2048
+
+using namespace std;
+typedef struct FILEOBJ {
+	//file connection
+	SOCKET fileSock;
+	//file handle
+	HANDLE file;
+
+	int operation;
+	enum OP {
+		//retrieve file
+		RETR,
+		//store file
+		STOR
+	};
+
+	LONG64 size;
+} FILEOBJ, *LPFILEOBJ;
+
+LPFILEOBJ GetFileObj(HANDLE hfile, LONG64 size, FILEOBJ::OP op) {
+	LPFILEOBJ newobj = NULL;
+
+	if ((newobj = (LPFILEOBJ)HeapAlloc(GetProcessHeap(), HEAP_ZERO_MEMORY, sizeof(FILEOBJ))) == NULL)
+		printf("HeapAlloc() failed with error %d\n", GetLastError());
+
+	if (newobj) {
+		newobj->file = hfile;
+		newobj->size = size;
+		newobj->operation = op;
 	}
 
+	return newobj;
 }
+//Prototype function declaration
+void menu();
+bool service(char *);
+int UploadFile(char*sendMess, char*localFile, char*serverFile)
+{
+	HANDLE Hfile;
+	//open file
+	Hfile = CreateFileA(localFile, GENERIC_READ, 0, NULL, OPEN_EXISTING, FILE_FLAG_SEQUENTIAL_SCAN, NULL);
+	if (Hfile == INVALID_HANDLE_VALUE)
+	{
+		int codeError = GetLastError();
+		if (codeError == ERROR_FILE_NOT_FOUND)
+		{
+			printf_s("Can not find local file");
+		}
+		else
+		{
+			printf_s("Error: %d", codeError);
+		}
+		return 0;
 
-//check is number or not
-bool CheckNumber(char s[]) {
-	int i, ok;
-	for (i = 0; i<strlen(s); i++) {
-		if (s[i] >= '0' && s[i] <= '9') {
-			ok = 1;
-		}
-		else {
-			ok = 0;
-			break;
-		}
 	}
-	if (ok == 1)
-		return true;
+	LARGE_INTEGER FileSize;
+	if (!GetFileSizeEx(Hfile, &FileSize)) {
+		printf("GetFileSizeEx() failed with error %d\n", GetLastError());
+		return 0;
+	}
+	LPFILEOBJ fileobject = GetFileObj(Hfile, FileSize.QuadPart, FILEOBJ::STOR);
+	if (fileobject != NULL)
+	{
+		sprintf_s(sendMess, BUFF_SIZE, "UPLOAD %s %ld", serverFile, fileobject->size);
+		return 1;
+	}
 	else
-		return false;
-}
-//function login
-void Login()
-{
-	//if account have logged
-	if (markLogIn == true)
 	{
-		printf("\n===> You have logged in before !!");
-		return;
+		return 0;
 	}
-	char accname[BUFF_SIZE];
-	char accpass[BUFF_SIZE];
-	char buff[BUFF_SIZE + 1];
-	printf("\n ---> Please Enter your username account: ");
-	gets_s(accname);
-	printf("\n ---> Please Enter your password account: ");
-	gets_s(accpass);
-	char prefix[BUFF_SIZE] = "LOGIN ";
-	//Log in with prefix + accname (username)
-	char zero[5] = " ";
-	strcat(accname, zero);
-	strcat(accname, accpass);
-	strcat(prefix, accname);
-	strcat(prefix, "\r\n"); //delimiter
-	int ret = send(client, prefix, BUFF_SIZE, 0);
-	if (ret == SOCKET_ERROR)
-		printf("\n ===> Error %d: Cannot send data. !!", WSAGetLastError());
-
-	//receive code from server
-
-	ret = recv(client, buff, BUFF_SIZE, 0);
-	if (ret == SOCKET_ERROR)
-		printf("\n ===> Error: %d ! Cannot receive message.", WSAGetLastError());
-	else if (strlen(buff) > 0) {
-		buff[ret] = 0;
-		SolveStream(buff);
-		while (!msgs.empty())
-		{
-			char *buff1 = msgs.front();
-			//if code: 10 is success
-			if (strcmp(buff1, "201") == 0) {
-				printf("\n ===> Login successfully!");
-				markLogIn = true;
-
-			}
-			//if code: 11 is account is locked
-			else if (strcmp(buff1, "410") == 0) {
-				printf("\n ===> Account is locked !!\n");
-			}
-			//if code 12 is account does not exist
-			else if (strcmp(buff1, "402") == 0)
-				printf("\n ===> Username does not exist !!\n");
-			//if password is incorrect
-			else if (strcmp(buff1, "403") == 0)
-				printf("\n ===> Password is incorrect !!\n");
-			//if code 13 account have logged in before
-			else if (strcmp(buff1, "404") == 0)
-				printf("\n ===> You have logged in before !!\n");
-			//if code 99 the request message type is not specified
-			else if (strcmp(buff1, "999") == 0)
-				printf("\n ===> The requested message type cannot be determined !!\n");
-			msgs.pop();
-		}
-		memset(buff, 0, BUFF_SIZE);
-
-	}
-
-
 }
-//function post
-void Register() {
-	char username[BUFF_SIZE];
-	char password[BUFF_SIZE];
-	char Repassword[BUFF_SIZE];
-	printf("\n ---> Please Enter your username: ");
-	gets_s(username);
-	printf("\n ---> Please Enter your password: ");
-	gets_s(password);
-	printf("\n ---> Please Enter your Re-password: ");
-	gets_s(Repassword);
-	if (strcmp(password, Repassword)!=0)
-	{
-		printf("You enter Re-password is not wrong\n");
-		return;
-	}
-	int ret;
-	char prefix[BUFF_SIZE] = "REGISTER ";
-	//Register with prefix + message
-	char zero[5] = " ";
-	strcat(username, zero);
-	strcat(username, password);
-	strcat(prefix, username);
-	strcat(prefix, "\r\n"); //delimiter
-	ret = send(client, prefix, BUFF_SIZE, 0);
-	if (ret == SOCKET_ERROR)
-		printf("\n ===> Error %d: Cannot send data. !!", WSAGetLastError());
-	char buff[BUFF_SIZE + 1];
-	//receive code from server
-	ret = recv(client, buff, BUFF_SIZE, 0);
-	if (ret == SOCKET_ERROR)
-		printf("\n ===> Error: %d ! Cannot receive message.", WSAGetLastError());
-	else if (strlen(buff) > 0) {
-		buff[ret] = 0;
-		SolveStream(buff);
-		while (!msgs.empty())
-		{
-			char *buff1 = msgs.front();
-			//if code 200 register successfully
-			if (strcmp(buff1, "200") == 0) {
-				printf("\n ===> Register successfully \n");
-			}
-			//if code 401 Username have already exist
-			else if (strcmp(buff1, "401") == 0) {
-				printf("\n ===> Username have already exist!!\n");
-			}
-			else if (strcmp(buff1, "404") == 0)
-				printf("\n ===> You have logged in before !!\n");
-			//if code 99 the request message type is not specified
-			else if (strcmp(buff1, "999") == 0) {
-				printf("\n ===> The requested message type cannot be determined !!\n");
-			}
+int main(int argc, char* argv[]) {
 
-			msgs.pop();
-		}
-		memset(buff, 0, BUFF_SIZE);
-
-
-	}
-
-}
-//function logout
-void Logout()
-{
-	////if account have not yet
-	if (!markLogIn)
-	{
-		printf("\n ===> You haven't logged yet !!\n");
-		return;
-	}
-	char prefix[BUFF_SIZE] = "BYE";
-	int ret;
-	//send message BYE
-	strcat(prefix, "\r\n"); //delimiter
-	ret = send(client, prefix, BUFF_SIZE, 0);
-	if (ret == SOCKET_ERROR)
-		printf("\n ===> Error %d: Cannot send data. !!", WSAGetLastError());
-	char buff[BUFF_SIZE + 1];
-	//receive code from server
-	ret = recv(client, buff, BUFF_SIZE, 0);
-	printf("Receive from server: %s\n", buff);
-	if (ret == SOCKET_ERROR)
-		printf("\n ===> Error: %d ! Cannot receive message.", WSAGetLastError());
-	else if (strlen(buff) > 0) {
-		buff[ret] = 0;
-		SolveStream(buff);
-		while (!msgs.empty())
-		{
-			char *buff1 = msgs.front();
-			
-			//if code 30 log out sucessfully
-			if (strcmp(buff1, "30") == 0) {
-				printf("\n ===> Log out successfully!\n");
-				markLogIn = false;
-			}
-			//if code 21 account have not logged yet
-			else if (strcmp(buff1, "21") == 0) {
-				printf("\n ===> Log out failed because you have not logged yet !!\n");
-			}
-			//if code 99 the request message type is not specified
-			else if (strcmp(buff1, "99") == 0) {
-				printf("\n ===> The requested message type cannot be determined !!\n");
-			}
-
-			msgs.pop();
-		}
-		memset(buff, 0, BUFF_SIZE);
-
-
-
-	}
-
-}
-//close windown
-void Shutdown()
-{
-	char prefix[BUFF_SIZE] = "EXIT";
-	int ret;
-	//send EXIT to server
-	strcat(prefix, "\r\n"); //delimiter
-	ret = send(client, prefix, BUFF_SIZE, 0);
-	if (ret == SOCKET_ERROR)
-		printf("\n ===> Error %d: Cannot send data. !!", WSAGetLastError());
-	//mark close the windown
-	markExist = true;
-
-}
-void Menu() {
-	printf("\n******** Menu ********\n");
-	printf("=== 1. LOG IN === \n");
-	printf("=== 2. REGISTER === \n");
-	printf("=== 3. LOG OUT === \n");
-	printf("=== 4. MAKE DIRECTORY === \n");
-	printf("=== 5. DELETE DIRECTORY === \n");
-	printf("=== 6. CHANGE WORKING DIRECTORY === \n");
-	printf("=== 7. UPLOAD FILE === \n");
-	printf("=== 8. DOWNLOAD FILE === \n");
-	printf("=== 9. DELETE FILE === \n");
-	printf("===10. MOVE FOLDER/FILE TO NEW LOCATION === \n");
-	printf("===11. SHOW LIST FILE IN DIRECTORY === \n");
-	printf("===12. PRINT WORKING DIRECTORY === \n");
-	printf("===13. SHUT DOWN === \n");
-	printf("@@@@@@@@@@@@@@@@@@@@@@\n");
-}
-
-
-int main(int argc, char*argv[])
-{
 	//Enter the ip address and port entry into command
-	char*SERVER_ADDR = argv[1];
-	int SERVER_PORT = atoi(argv[2]);
-	//Step 1: Initiate winsock
+	if (argc != 3) {
+		printf_s("Usage: %s <ServerIpAddress> <PortNumber>\n", argv[0]);
+		return 1;
+	}
+	char *server_ipaddress = argv[1];
+	int server_port = atoi(argv[2]);
+
+	//Inittiate Winsock
 	WSADATA wsaData;
 	WORD wVersion = MAKEWORD(2, 2);
-	if (WSAStartup(wVersion, &wsaData))
-	{
-		printf("Error: %d", WSAGetLastError());
+	if (WSAStartup(wVersion, &wsaData)) {
+		printf_s("Version is not supported.\n");
 		return 0;
 	}
-	//Step 2: Construct socket
+	printf_s("Client started!\n");
 
+	//Construct Socket
+	SOCKET client;
 	client = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
-
-	if (client == INVALID_SOCKET)
-	{
-		printf("Error: %d", WSAGetLastError());
+	if (client == INVALID_SOCKET) {
+		printf_s("ERROR %d: Cannot create server socket", WSAGetLastError());
 		return 0;
 	}
-	//Step 3: Specify server address
+
+	//Specify server address
 	sockaddr_in serverAddr;
-	serverAddr.sin_family = AF_INET; //IPv4 address
-	serverAddr.sin_port = htons(SERVER_PORT); //Convert the ipv4 address to binary
-	inet_pton(AF_INET, SERVER_ADDR, &serverAddr.sin_addr);
-	//Step 4: Request to connect server
-	if (connect(client, (sockaddr *)&serverAddr,
-		sizeof(serverAddr))) {
-		printf("Error! Cannot connect server.");
+	serverAddr.sin_family = AF_INET;
+	
+	serverAddr.sin_port = htons(server_port);
+	inet_pton(AF_INET, server_ipaddress, &serverAddr.sin_addr);
+
+	//request to connecct server
+	client = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+	if (connect(client, (sockaddr *)&serverAddr, sizeof(serverAddr))) {
+		printf_s("Error %d: Cannot connect server!\n", WSAGetLastError());
+		closesocket(client);
 		return 0;
 	}
-	printf("Conneted Server\n");
+	printf_s("Connected server!\n");
 
-	//Step 5: Communicate with server
+	//Communication
 	char buff[BUFF_SIZE];
-	//display the interface until the user closes the window
-	do {
+	vector<string> responseList;
+	int ret;
+	while (1) {
 		//show menu
-		Menu();
-		char enter[255];
-		int choice;
-
-
-		do
+		menu();
+		bool flag;
+		//Send message
+		flag = service(buff);
+		if (flag == true)
 		{
-
-			printf("\nPlease! you have to select function: ");
-
-			//enter in user select function
-			gets_s(enter);
-			//if enter is not number
-			if (!CheckNumber(enter))
-			{
-				printf("\nInvalid! You enter a character other than a number !!\n");
-
-
-
+			ret = send_stream(client, buff);
+			if (ret == SOCKET_ERROR) {
+				printf_s("Error %d: Cannot send data.\n", WSAGetLastError());
 				continue;
 			}
-			//convert char to int
-			choice = atoi(enter);
-			if (choice < 1 || choice > 13)
-			{
-				printf("\nYou entered the wrong function, please! re-enter !!\n");
-			}
-
-
-
-		} while (choice < 1 || choice > 13);
-		switch (choice)
-		{
-		case 1:
-			Login();
-			break;
-		case 2:
-			Register();
-			break;
-		case 3:
-			Logout();
-			break;
-		case 13:
-			Shutdown();
-			break;
-		default:
-			break;
 		}
+		else
+		{
+			continue;
+		}
+		//Receive echo message
+		ret = recv_stream(client, responseList);
+		if (ret == SOCKET_ERROR)
+			printf_s("Error %d: Cannot receive data.\n", WSAGetLastError());
+		else {
+			for (string response : responseList)
+				//Handle message
+				cout << printNotice(stoi(response)) << endl;
+		}
+	}
 
-	} while (!markExist);
-
-	//Step 6: Close socket
+	//Close socket
 	closesocket(client);
-	//Step 7: Terminate Winsock
+
+	//Terminate Winsock
 	WSACleanup();
+
+	return 0;
 }
 
+/**
+*@Function menu : print to the screen the services for the user to choose
+**/
+void menu() {
+	printf("\n******** Menu ********\n");
+	printf_s("=== 1. REGISTER === \n");
+	printf_s("=== 2. LOGIN === \n");
+	printf_s("=== 3. LOG OUT === \n");
+	printf_s("=== 4. MAKE DIRECTORY === \n");
+	printf_s("=== 5. REMOVE DIRECTORY === \n");
+	printf_s("=== 6. CHANGE WORKING DIRECTORY === \n");
+	printf_s("=== 7. UPLOAD FILE === \n");
+	printf_s("=== 8. DOWNLOAD FILE === \n");
+	printf_s("=== 9. DELETE FILE === \n");
+	printf_s("===10. MOVE FOLDER/FILE TO NEW LOCATION === \n");
+	printf_s("===11. SHOW LIST FILE IN DIRECTORY === \n");
+	printf_s("===12. PRINT WORKING DIRECTORY === \n");
+	printf_s("===13. SHUT DOWN === \n");
+	printf_s("\n@@@@@@@@@@@@@@@@@@@@@@\n");
+	printf_s("Your choice is: \n");
+	
+}
 
+/**
+*@Function service : let user choose service
+*@Param [out] message : message sent to server
+**/
+bool service(char *message) {
+	int choice;
+	char temp[BUFF_SIZE];
+	char temp1[BUFF_SIZE];
+	char temp2[BUFF_SIZE];
+	while (1) {
+		scanf_s("%d", &choice);
 
+		//Clear input buffer
+		int c;
+		while ((c = getchar()) != '\n' && c != EOF);
+
+		switch (choice) {
+			//Register service
+		case 1: {
+			printf_s("===REGISTER===\n");
+			printf_s(" >>> Enter your username: ");
+			gets_s(temp, BUFF_SIZE);
+			printf_s(" >>> Enter your password: ");
+			gets_s(temp1, BUFF_SIZE);
+			printf_s(" >>> Enter your Re-password: ");
+			gets_s(temp2, BUFF_SIZE);
+			if (strcmp(temp1, temp2)!=0)
+			{
+				printf_s("---> REPASSWORD INCORRECT");
+				return false;
+			}
+			sprintf_s(message, BUFF_SIZE, "REGISTER %s %s", temp, temp1);
+			return true;
+		}
+			//Login service
+		case 2: {
+			printf_s("===LOGIN===\n");
+			printf_s(" >>> Enter username: ");
+			gets_s(temp, BUFF_SIZE);
+			printf_s(" >>> Enter password: ");
+			gets_s(temp1, BUFF_SIZE);
+			sprintf_s(message, BUFF_SIZE, "LOGIN %s %s", temp, temp1);
+			return true;
+		}
+			//Logout service
+		case 3: {
+			sprintf_s(message, BUFF_SIZE, "LOGOUT");
+			return true;
+		}
+			//Make Directory service
+		case 4: {
+			printf_s("===MAKE DIRECTORY===\n");
+			printf_s(" >>> Enter pathname: ");
+			gets_s(temp, BUFF_SIZE);
+			sprintf_s(message, BUFF_SIZE, "MKDIR %s", temp);
+			return true;
+		}
+			//Remove directory service
+		case 5: {
+			printf_s("===REMOVE DIRECTORY===\n");
+			printf_s(" >>> Enter pathname: ");
+			gets_s(temp, BUFF_SIZE);
+			sprintf_s(message, BUFF_SIZE, "RMDIR %s", temp);
+			return true;
+		}
+			//Change working directory
+		case 6: {
+			printf_s("===CHANGE WORKING DIRECTORY===\n");
+			printf_s(" >>> Enter pathname: ");
+			gets_s(temp, BUFF_SIZE);
+			sprintf_s(message, BUFF_SIZE, "CWDIR %s", temp);
+			return true;
+		}
+			//Upload file
+		case 7: {
+			printf_s("===UPLOAD FILE===\n");
+			printf_s(" >>> Enter local file name: ");
+			gets_s(temp, BUFF_SIZE);
+			printf(" >>> Enter remote file name: ");
+			gets_s(temp1, BUFF_SIZE);
+			strcpy_s(message, BUFF_SIZE, "");
+			if (UploadFile(message, temp, temp1) == 0)
+			{
+				return false;
+			}
+			sprintf_s(message, BUFF_SIZE, "UPLOAD %s", temp);
+			return true;
+		}
+			//Download file
+		case 8: {
+			printf_s("===DOWNLOAD FILE===\n");
+			printf_s(" >>> Enter local file name: ");
+			gets_s(temp, BUFF_SIZE);
+			printf_s(" >>> Enter remote file name: ");
+			gets_s(temp1, BUFF_SIZE);
+			sprintf_s(message, BUFF_SIZE, "DOWNLOAD %s", temp);
+			return true;
+		}
+			//Delete file
+		case 9: {
+			printf_s("===DELETE FILE===\n");
+			printf_s(" >>> Enter file name: ");
+			gets_s(temp, BUFF_SIZE);
+			sprintf_s(message, BUFF_SIZE, "DELETE %s", temp);
+			return true;
+		}
+			//Move folder/file to new location
+		case 10: {
+			printf_s("===MOVE FOLDER\FILE===\n");
+			printf_s(" >>> Enter old pathname: ");
+			gets_s(temp, BUFF_SIZE);
+			printf_s(" >>> Enter new pathname: ");
+			gets_s(temp1, BUFF_SIZE);
+			sprintf_s(message, BUFF_SIZE, "MOV %s %s", temp,temp1);
+			return true;
+		}
+			//Show list file in directory
+		case 11: {
+			printf_s("===SHOW LIST FILE IN DIRECTORY===\n");
+			printf_s(" >>> Enter path name: ");
+			gets_s(temp, BUFF_SIZE);
+			sprintf_s(message, BUFF_SIZE, "SHOW %s", temp);
+			return true;
+		}
+			//Print working directory
+		case 12: {
+			printf_s("===PRINT WORKING DIRECTORY===\n");
+			sprintf_s(message, BUFF_SIZE, "PWDIR");
+			return true;
+		}
+			//Shut down
+		case 13: {
+			exit(0);
+		}
+			//Service does not exist
+		default: {
+			printf_s("Service does not exist, choose again.\n");
+			continue;
+		}
+		}
+	}
+}
