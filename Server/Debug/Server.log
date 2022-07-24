@@ -1,3 +1,4 @@
 ﻿  Server.cpp
+f:\btl_test\btl_test\server\server.cpp(822): warning C4715: 'handleMESSAGE': not all control paths return a value
   Server.vcxproj -> F:\BTL_TEST\BTL_TEST\Debug\Server.exe
   Server.vcxproj -> F:\BTL_TEST\BTL_TEST\Debug\Server.pdb (Full PDB)

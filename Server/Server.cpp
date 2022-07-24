@@ -13,6 +13,7 @@
 #include "SessionManagement.h"
 #include "StreamTransmission.h"
 #include "CodeStatus.h"
+#define bzero(b,len) (memset((b), '\0', (len)), (void) 0);
 
 #pragma comment (lib, "Ws2_32.lib")
 
@@ -95,6 +96,7 @@ _Ret_maybenull_ LPFILEOBJ GetFileObj(_In_ HANDLE hfile, _In_ LONG64 size, _In_ F
 	return newobj;
 }
 //Run the program
+char *filename1;
 int main(int argc, char* argv[]) {
 
 	// Validate the parameters
@@ -151,7 +153,7 @@ int main(int argc, char* argv[]) {
 	char buff[BUFF_SIZE];
 	fd_set readfds, initfds; //use initfds to initiate readfds at the begining of every loop step
 
-	//Initialize the fd_set with the value NULL
+							 //Initialize the fd_set with the value NULL
 	FD_ZERO(&initfds);
 
 	//Add socket to fd_set
@@ -187,7 +189,7 @@ int main(int argc, char* argv[]) {
 
 				//If number of clients == FD_SETSIZE, move session_list for workerThread,
 				if (session_list.size() == FD_SETSIZE) {
-					thread_list.push_back((HANDLE)_beginthreadex(0, 0, workerThread,(void*) &session_list, 0, 0));
+					thread_list.push_back((HANDLE)_beginthreadex(0, 0, workerThread, (void*)&session_list, 0, 0));
 
 					EnterCriticalSection(&critical_section);
 
@@ -213,8 +215,8 @@ int main(int argc, char* argv[]) {
 
 		//receive data from clients
 		vector<Session>::iterator itr;   //declare an iterator
-		//Assign itr to the start of the vector until it has not reached the end
-		for(itr = session_list.begin(); itr != session_list.end();){ 
+										 //Assign itr to the start of the vector until it has not reached the end
+		for (itr = session_list.begin(); itr != session_list.end();) {
 			if (nEvents > 0) {
 				SOCKET socket = itr->getSocket();
 				char *clientIP = itr->getClientIp();
@@ -226,7 +228,7 @@ int main(int argc, char* argv[]) {
 					if (ret <= 0) {
 						if (ret == 0)
 							printf_s("Client disconnect.\n");
-						else 
+						else
 							printf_s("Error %d: Cannot recieve data.\n", WSAGetLastError());
 
 						FD_CLR(socket, &initfds); //Remove socket from fd_set
@@ -247,6 +249,7 @@ int main(int argc, char* argv[]) {
 								printf_s("Error %d: Cannot send data.\n", WSAGetLastError());
 								break;
 							}
+							
 						}
 					}
 				}//End if
@@ -270,7 +273,7 @@ int main(int argc, char* argv[]) {
 **/
 unsigned _stdcall workerThread(void *param) {
 	EnterCriticalSection(&critical_section);
-	vector<Session> session_list =*(vector<Session> *)param; //copy session_list from mainThread to workerThread
+	vector<Session> session_list = *(vector<Session> *)param; //copy session_list from mainThread to workerThread
 	completed = true;
 	LeaveCriticalSection(&critical_section);
 	WakeConditionVariable(&copy_completed);	//Wake mainTheard to continue the mission
@@ -281,7 +284,7 @@ unsigned _stdcall workerThread(void *param) {
 	char buff[BUFF_SIZE];
 
 	FD_ZERO(&initfds); //Initialize the fd_set with the value NULL
-	//Add socket to fd_set
+					   //Add socket to fd_set
 	for (Session &session : session_list) {
 		FD_SET(session.getSocket(), &initfds);
 	}
@@ -296,7 +299,7 @@ unsigned _stdcall workerThread(void *param) {
 
 		//receive data from clients
 		vector<Session>::iterator itr;  //declare an iterator
-		//Assign itr to the start of the vector until it has not reached the end
+										//Assign itr to the start of the vector until it has not reached the end
 		for (itr = session_list.begin(); itr != session_list.end();) {
 			if (nEvents > 0) {
 				SOCKET sock = itr->getSocket();
@@ -373,6 +376,22 @@ void splitString(string input, string& s1, string& s2) {
 	}
 	else s1 = input;
 }
+bool CheckFileExisting(char* file_name)
+{
+	//return true: file exist
+	//return false: otherwise
+	bool is_exist = true;
+	fstream data_file;
+	data_file.open(file_name, ios::in);
+	bool ret = data_file.fail();
+	if (ret == true)
+	{
+		is_exist = false;
+	}
+	data_file.close();
+
+	return is_exist;
+}
 
 bool checkAccess(Session &session, char *path, char *fullPath) {
 	char rootPath[260];
@@ -393,7 +412,7 @@ bool checkAccess(Session &session, char *path, char *fullPath) {
 	strcpy_s(fullPath, 260, "");
 	return FALSE;
 }
-int handleUpload(Session &session, char*filename, char*FileSize)
+int Upload(Session &session, char*filename)
 {
 	char fullpath[260];
 	//check if logged in 
@@ -406,44 +425,15 @@ int handleUpload(Session &session, char*filename, char*FileSize)
 	{
 		return NO_ACCESS;
 	}
-	EnterCriticalSection(&critical_section);
-	HANDLE hFile = CreateFileA(fullpath, GENERIC_WRITE | DELETE, 0, NULL, CREATE_NEW, FILE_FLAG_OVERLAPPED, NULL);
-	if (hFile == INVALID_HANDLE_VALUE)
+	if (CheckFileExisting(filename))
 	{
-		int error = GetLastError();
-		if (error == ERROR_FILE_EXISTS)
-		{
-			return FILE_ALREADY_EXISTS;
-		}
-		else if (error == ERROR_PATH_NOT_FOUND)
-		{
-			return PATH_NOT_FOUND;
-		}
-		else if (error == ERROR_INVALID_NAME)
-		{
-			return INVALID_NAME;
-		}
-		else
-		{
-			return SERVER_FAIL;
-		}
-		LeaveCriticalSection(&critical_section);
-
+		return FILE_ALREADY_EXISTS;
 	}
-	LPFILEOBJ fileobj;
-	LONG64 size;
-	size = _atoi64(FileSize);
-
-	fileobj = GetFileObj(hFile, size, FILEOBJ::STOR);
-	if (fileobj == NULL)
-	{
-		return SERVER_FAIL;
-	}
-
 	
-	return SUCCESS_UPLOAD;
+	return CREATE_REMOTE_FILE;
+
 }
-int handleDownLoad(Session &session, char*filename)
+int DownLoad(Session &session, char*filename)
 {
 	char fullpath[260];
 	//check if logged in 
@@ -456,33 +446,13 @@ int handleDownLoad(Session &session, char*filename)
 	{
 		return NO_ACCESS;
 	}
-	//previous file wasnt closed
-	EnterCriticalSection(&critical_section);
-	HANDLE hFile = CreateFileA(fullpath, GENERIC_READ, 0, NULL, OPEN_EXISTING, FILE_FLAG_OVERLAPPED | FILE_FLAG_SEQUENTIAL_SCAN, NULL);
-	if (hFile == INVALID_HANDLE_VALUE) {
-		int error = GetLastError();
-
-		if (error == ERROR_FILE_NOT_FOUND)
-			return FILE_DOES_NOT_EXISTS;
-		else if (error == ERROR_SHARING_VIOLATION)
-			return FILE_BEING_ACCESSED;
-		else
-			return SERVER_FAIL;
-
-		LeaveCriticalSection(&critical_section);
-
-	}
-	LARGE_INTEGER fileSize;
-	LPFILEOBJ fileobj;
-	LeaveCriticalSection(&critical_section);
-	GetFileSizeEx(hFile, &fileSize);
-	fileobj = GetFileObj(hFile, fileSize.QuadPart, FILEOBJ::RETR);
-	if (fileobj == NULL) {
-		return SERVER_FAIL;
+	if (!CheckFileExisting(filename))
+	{
+		return FILE_ALREADY_EXISTS;
 	}
 	return SUCCESS_DOWNLOAD;
-
 }
+
 int handleMKDIR(Session &session, char *path) {
 	char fullPath[260];
 	//check if logged in
@@ -559,14 +529,14 @@ int	handleCWDIR(Session &session, char *path) {
 	}
 	//Check length of path
 	if (strlen(path) == 0 || strlen(path) > 260) {
-		return INVALID_PATH ;
+		return INVALID_PATH;
 	}
 	//Check validity of directory entered
 	if (!checkAccess(session, path, fullPath)) {
 		return NO_ACCESS;
 	}
 	//Change working directory
-	find = FindFirstFileExA(fullPath,FindExInfoBasic,fileData,FindExSearchLimitToDirectories,NULL,
+	find = FindFirstFileExA(fullPath, FindExInfoBasic, fileData, FindExSearchLimitToDirectories, NULL,
 		FIND_FIRST_EX_CASE_SENSITIVE);
 	if (find == INVALID_HANDLE_VALUE)
 		return PATH_NOT_FOUND;
@@ -610,7 +580,7 @@ int handleDELETE(Session &session, char *path) {
 	LeaveCriticalSection(&critical_section);
 }
 
-int handleMOV(Session &session, char *oldPath, char *newPath){
+int handleMOV(Session &session, char *oldPath, char *newPath) {
 	char fullOldPath[260];
 	char fullNewPath[260];
 	//Check if logged in
@@ -714,7 +684,8 @@ int handleLOGIN(Session &session, string username, string password) {
 	ifstream ifs(file, ios::in);
 	//Client already login
 	if (session.loginStatus() == 1) {
-		return ALREADY_LOGIN;}
+		return ALREADY_LOGIN;
+	}
 	auto pos = findUser(username);
 	//Account login in a another session
 	if (pos != session_list.end())
@@ -735,7 +706,7 @@ int handleLOGIN(Session &session, string username, string password) {
 }
 
 
-int handleLOGOUT(Session &session){
+int handleLOGOUT(Session &session) {
 	//Logout successful
 	if (session.loginStatus()) {
 		session.logOut();
@@ -766,9 +737,9 @@ int handlePWDIR(Session &session) {
 }
 
 int handleMESSAGE(Session& session, string request) {
-	string header, message, username, password, oldPath, newPath, filename, filesize;
-	char *temp= (char *)message.c_str();
-	
+	string header, message, username, password, oldPath, newPath, filename, content;
+	char *temp = (char *)message.c_str();
+
 	splitString(request, header, message);
 	if (header == "LOGIN") {
 		splitString(message, username, password);
@@ -805,23 +776,49 @@ int handleMESSAGE(Session& session, string request) {
 	}
 	else if (header == "UPLOAD")
 	{
-		splitString(message, filename, filesize);
+		splitString(message, filename, content);
+		
 		char *temp1 = (char *)filename.c_str();
-		char *temp2 = (char *)filesize.c_str();
-		return handleUpload(session, temp1, temp2);
+		char *temp2 = (char *)content.c_str();
+		int k = Upload(session, temp1);
+
+		fstream data_file;
+		printf("\n Text: %s", temp2);
+		data_file.open(temp1, ios::out | ios::app);
+		data_file << temp2;
+		data_file.close();
+		return SUCCESS_UPLOAD;
+	}
+	else if (header == "CREATE")
+	{
+		return Upload(session, temp);
 	}
 	else if (header == "DOWNLOAD")
-	{
-		return handleDownLoad(session, temp);
+	{   
+		int n = DownLoad(session, temp);
+		if (n==80)
+		{
+			errno_t file_in;
+			FILE *FileIn;
+			file_in = fopen_s(&FileIn, temp, "r");
+		}
 	}
+	
 	else if (header == "PWDIR") {
 		return handlePWDIR(session);
 	}
 	else if (header == "SHOW") {
 		return handleSHOW(session, temp);
 	}
-	else 
-		return UNKNOWN;
+	else
+	{
+		fstream data_file;
+		printf("Header: %s", header.c_str());
+		data_file.open(header.c_str(), ios::out | ios::app);
+		data_file << message.c_str();
+		data_file.close();
+		return SUCCESS_UPLOAD;
+	}
 }
 
 

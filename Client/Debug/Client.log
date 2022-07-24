@@ -1,7 +1,2 @@
-﻿  Client.cpp
-f:\btl_test\btl_test\client\client.cpp(76): warning C4477: 'sprintf_s' : format string '%ld' requires an argument of type 'long', but variadic argument 2 has type 'LONG64'
-  f:\btl_test\btl_test\client\client.cpp(76): note: consider using '%lld' in the format string
-  f:\btl_test\btl_test\client\client.cpp(76): note: consider using '%I64d' in the format string
-f:\btl_test\btl_test\client\client.cpp(300): warning C4129: 'F': unrecognized character escape sequence
-  Client.vcxproj -> F:\BTL_TEST\BTL_TEST\Debug\Client.exe
+﻿  Client.vcxproj -> F:\BTL_TEST\BTL_TEST\Debug\Client.exe
   Client.vcxproj -> F:\BTL_TEST\BTL_TEST\Debug\Client.pdb (Full PDB)

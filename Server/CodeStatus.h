@@ -98,7 +98,7 @@ using namespace std;
 
 //Undefined messages
 #define UNKNOWN 999
-
+#define CREATE_REMOTE_FILE 200
 
 /**
 *@Functiom printNotice : Print out the message screen
@@ -140,6 +140,7 @@ inline string printNotice(int code) {
 	case 120: return "SUCCESSFUL PRINT WORKING DIRECTORY.";
 	case 404: return "SERVER FAIL.";
 	case 999: return "UNDEFINED MESSAGES";
+	case 200: return "CREATE REMOTE FILE SUCCESS";
 
 	default: return string();
 	}

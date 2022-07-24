@@ -1,5 +1,0 @@
-﻿  Server.cpp
-e:\ltm\server\streamtransmission.h(25): warning C4267: '=': conversion from 'size_t' to 'int', possible loss of data
-e:\ltm\server\server.cpp(261): warning C4267: 'argument': conversion from 'size_t' to 'DWORD', possible loss of data
-  Server.vcxproj -> E:\LTM\x64\Debug\Server.exe
-  Server.vcxproj -> E:\LTM\x64\Debug\Server.pdb (Full PDB)

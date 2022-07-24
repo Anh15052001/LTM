@@ -12,6 +12,8 @@
 #define BUFF_SIZE 2048
 
 using namespace std;
+
+#define bzero(b,len) (memset((b), '\0', (len)), (void) 0)
 typedef struct FILEOBJ {
 	//file connection
 	SOCKET fileSock;
@@ -43,23 +45,76 @@ LPFILEOBJ GetFileObj(HANDLE hfile, LONG64 size, FILEOBJ::OP op) {
 
 	return newobj;
 }
-typedef struct Session {
-	//cmd socket
-	SOCKET cmdSock;
-	//file obj use for transmitting file
-	LPFILEOBJ fileobj;
+void send_file(char*temp, char*temp3, SOCKET sockfd) {
+	errno_t file_in;
+	FILE *FileIn;
+	file_in = fopen_s(&FileIn, temp, "r");
+	char data[BUFF_SIZE] = { 0 };
+	char buff_rev[BUFF_SIZE] = { 0 };
+	vector<string> responseList;
+	char create_file[BUFF_SIZE] = "CREATE ";
+	char file_create[BUFF_SIZE];
+	strcpy_s(file_create, BUFF_SIZE, temp3);
+	strcat_s(create_file, BUFF_SIZE, file_create);
+	int ret1 = send_stream(sockfd, create_file);
+	if (ret1 == SOCKET_ERROR) {
+		printf_s("Error %d: Cannot send data.\n", WSAGetLastError());
+		return;
+	}
+	int k1 = recv_stream(sockfd, responseList);
+	for (string response : responseList)
+	{
+		cout << printNotice(stoi(response)) << endl;
+		if (stoi(response)!=200)
+		{
+			return;
+		}
+	}
 
-} Session, *LpSession;
-
-LpSession getSession() {
-	LpSession newobj = NULL;
-
-	if ((newobj = (LpSession)GlobalAlloc(GPTR, sizeof(Session))) == NULL)
-		printf("GlobalAlloc() failed with error %d\n", GetLastError());
-
-	return newobj;
+	printf("\n---> Starting sending....");
+	int temp1 = 0;
+	int temp2 = 0;
+	char name[BUFF_SIZE];
+	
+	char zero[2] = " ";
+	bool flag = false;
+	while ((fgets(data, BUFF_SIZE, FileIn) != NULL)) {
+		char mess[BUFF_SIZE] = "UPLOAD ";
+		strcpy_s(name, BUFF_SIZE, temp3);
+		strcat_s(mess, BUFF_SIZE, name);
+		strcat_s(mess, BUFF_SIZE, zero);
+		strcat_s(mess, BUFF_SIZE, data);
+		printf("name: %s", mess);
+			
+		
+		int ret = send_stream(sockfd, mess);
+		temp1++;
+		if (ret == SOCKET_ERROR) {
+			printf_s("Error %d: Cannot send data.\n", WSAGetLastError());
+			continue;
+		}
+		int k = recv_stream(sockfd, responseList);
+		for (string response : responseList)
+		{
+			cout << printNotice(stoi(response)) << endl;
+			if (stoi(response)==70)
+			{
+				temp2++;
+			}
+		}
+		bzero(mess, BUFF_SIZE);
+		bzero(name, BUFF_SIZE);
+		bzero(data, BUFF_SIZE);
+	}
+	if (temp1==temp2)
+	{
+		printf("\n---> UPLOAD SUCCESS");
+	}
+	else
+	{
+		printf("\n---> SERVER FAIL");
+	}
 }
-LpSession getSession();
 //Prototype function declaration
 void menu();
 bool service(char *);
@@ -98,24 +153,8 @@ int UploadFile(char*sendMess, char*localFile, char*serverFile)
 		return 0;
 	}
 }
-int DownloadFile(LpSession session, char*sendMess, char*localFile, char*serverFile)
-{
-	HANDLE Hfile;
-	Hfile = CreateFileA(localFile, GENERIC_WRITE | DELETE, 0, NULL, CREATE_NEW, FILE_FLAG_SEQUENTIAL_SCAN, NULL);
-	if (Hfile == INVALID_HANDLE_VALUE) {
-		int error = GetLastError();
-		if (error == ERROR_FILE_EXISTS)
-			printf_s("Local file alredy exist");
-		else
-			printf_s("Error: %d", GetLastError());
-		return 0;
-	}
-	else {
-		session->fileobj = GetFileObj(Hfile, 0, FILEOBJ::RETR);
-		sprintf_s(sendMess, BUFF_SIZE, "DOWNLOAD %s", serverFile);
-		return 1;
-	}
-}
+SOCKET client;
+char local_file[BUFF_SIZE];
 int main(int argc, char* argv[]) {
 
 	//Enter the ip address and port entry into command
@@ -136,7 +175,7 @@ int main(int argc, char* argv[]) {
 	printf_s("Client started!\n");
 
 	//Construct Socket
-	SOCKET client;
+	
 	client = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
 	if (client == INVALID_SOCKET) {
 		printf_s("ERROR %d: Cannot create server socket", WSAGetLastError());
@@ -146,7 +185,7 @@ int main(int argc, char* argv[]) {
 	//Specify server address
 	sockaddr_in serverAddr;
 	serverAddr.sin_family = AF_INET;
-	
+
 	serverAddr.sin_port = htons(server_port);
 	inet_pton(AF_INET, server_ipaddress, &serverAddr.sin_addr);
 
@@ -171,6 +210,7 @@ int main(int argc, char* argv[]) {
 		flag = service(buff);
 		if (flag == true)
 		{
+			
 			ret = send_stream(client, buff);
 			if (ret == SOCKET_ERROR) {
 				printf_s("Error %d: Cannot send data.\n", WSAGetLastError());
@@ -187,8 +227,13 @@ int main(int argc, char* argv[]) {
 			printf_s("Error %d: Cannot receive data.\n", WSAGetLastError());
 		else {
 			for (string response : responseList)
+			{
+				//Handle message
 				//Handle message
 				cout << printNotice(stoi(response)) << endl;
+
+				
+			}
 		}
 	}
 
@@ -221,7 +266,7 @@ void menu() {
 	printf_s("===13. SHUT DOWN === \n");
 	printf_s("\n@@@@@@@@@@@@@@@@@@@@@@\n");
 	printf_s("Your choice is: \n");
-	
+
 }
 
 /**
@@ -250,7 +295,7 @@ bool service(char *message) {
 			gets_s(temp1, BUFF_SIZE);
 			printf_s(" >>> Enter your Re-password: ");
 			gets_s(temp2, BUFF_SIZE);
-			if (strcmp(temp1, temp2)!=0)
+			if (strcmp(temp1, temp2) != 0)
 			{
 				printf_s("---> REPASSWORD INCORRECT");
 				return false;
@@ -258,7 +303,7 @@ bool service(char *message) {
 			sprintf_s(message, BUFF_SIZE, "REGISTER %s %s", temp, temp1);
 			return true;
 		}
-			//Login service
+				//Login service
 		case 2: {
 			printf_s("===LOGIN===\n");
 			printf_s(" >>> Enter username: ");
@@ -268,12 +313,12 @@ bool service(char *message) {
 			sprintf_s(message, BUFF_SIZE, "LOGIN %s %s", temp, temp1);
 			return true;
 		}
-			//Logout service
+				//Logout service
 		case 3: {
 			sprintf_s(message, BUFF_SIZE, "LOGOUT");
 			return true;
 		}
-			//Make Directory service
+				//Make Directory service
 		case 4: {
 			printf_s("===MAKE DIRECTORY===\n");
 			printf_s(" >>> Enter pathname: ");
@@ -281,7 +326,7 @@ bool service(char *message) {
 			sprintf_s(message, BUFF_SIZE, "MKDIR %s", temp);
 			return true;
 		}
-			//Remove directory service
+				//Remove directory service
 		case 5: {
 			printf_s("===REMOVE DIRECTORY===\n");
 			printf_s(" >>> Enter pathname: ");
@@ -289,7 +334,7 @@ bool service(char *message) {
 			sprintf_s(message, BUFF_SIZE, "RMDIR %s", temp);
 			return true;
 		}
-			//Change working directory
+				//Change working directory
 		case 6: {
 			printf_s("===CHANGE WORKING DIRECTORY===\n");
 			printf_s(" >>> Enter pathname: ");
@@ -297,24 +342,20 @@ bool service(char *message) {
 			sprintf_s(message, BUFF_SIZE, "CWDIR %s", temp);
 			return true;
 		}
-			//Upload file
+				//Upload file
 		case 7: {
 			printf_s("===UPLOAD FILE===\n");
-			printf(" >>> Enter local file name: ");
+			printf_s(" >>> Enter local file name: ");
 			gets_s(temp, BUFF_SIZE);
-			printf(" >>> Enter remote file name: ");
+			printf_s(" >>> Enter remote file name: ");
 			gets_s(temp1, BUFF_SIZE);
 			strcpy_s(message, BUFF_SIZE, "");
-			
-			if (UploadFile(message, temp, temp1) == 0)
-			{
-				return false;
-			}
-			
+			printf_s(" ---> Upload file %s ...", temp);
+			send_file(temp, temp1, client);
 			//sprintf_s(message, BUFF_SIZE, "UPLOAD %s", temp1);
-			return true;
+			return false;
 		}
-			//Download file
+				//Download file
 		case 8: {
 			printf_s("===DOWNLOAD FILE===\n");
 			printf_s(" >>> Enter local file name: ");
@@ -324,7 +365,7 @@ bool service(char *message) {
 			sprintf_s(message, BUFF_SIZE, "DOWNLOAD %s", temp);
 			return true;
 		}
-			//Delete file
+				//Delete file
 		case 9: {
 			printf_s("===DELETE FILE===\n");
 			printf_s(" >>> Enter file name: ");
@@ -332,17 +373,17 @@ bool service(char *message) {
 			sprintf_s(message, BUFF_SIZE, "DELETE %s", temp);
 			return true;
 		}
-			//Move folder/file to new location
+				//Move folder/file to new location
 		case 10: {
 			printf_s("===MOVE FOLDER\FILE===\n");
 			printf_s(" >>> Enter old pathname: ");
 			gets_s(temp, BUFF_SIZE);
 			printf_s(" >>> Enter new pathname: ");
 			gets_s(temp1, BUFF_SIZE);
-			sprintf_s(message, BUFF_SIZE, "MOV %s %s", temp,temp1);
+			sprintf_s(message, BUFF_SIZE, "MOV %s %s", temp, temp1);
 			return true;
 		}
-			//Show list file in directory
+				 //Show list file in directory
 		case 11: {
 			printf_s("===SHOW LIST FILE IN DIRECTORY===\n");
 			printf_s(" >>> Enter path name: ");
@@ -350,17 +391,17 @@ bool service(char *message) {
 			sprintf_s(message, BUFF_SIZE, "SHOW %s", temp);
 			return true;
 		}
-			//Print working directory
+				 //Print working directory
 		case 12: {
 			printf_s("===PRINT WORKING DIRECTORY===\n");
 			sprintf_s(message, BUFF_SIZE, "PWDIR");
 			return true;
 		}
-			//Shut down
+				 //Shut down
 		case 13: {
 			exit(0);
 		}
-			//Service does not exist
+				 //Service does not exist
 		default: {
 			printf_s("Service does not exist, choose again.\n");
 			continue;

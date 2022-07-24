@@ -134,6 +134,7 @@ inline string printNotice(int code) {
 	case 81: return "\n ---> FILE DOES NOT EXISTS.";
 	case 90: return "\n ---> SUCCESSFUL DELETE.";
 	case 91: return "\n ---> NOT FILE.";
+	case 200: return "\n ---> CREATE REMOTE FILE SUCCESS";
 	case 100: return "\n ---> SUCCESSFUL MOVE.";
 	case 101: return "\n ---> PATH ALREADY EXISTS.";
 	case 110: return "\n ---> SUCCESSFUL SHOW.";
