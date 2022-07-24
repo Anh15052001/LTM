@@ -443,6 +443,46 @@ int handleUpload(Session &session, char*filename, char*FileSize)
 	
 	return SUCCESS_UPLOAD;
 }
+int handleDownLoad(Session &session, char*filename)
+{
+	char fullpath[260];
+	//check if logged in 
+	if (session.loginStatus() == 0)
+	{
+		return NOT_LOGIN;
+	}
+	//check validity of directory entered
+	if (!checkAccess(session, filename, fullpath))
+	{
+		return NO_ACCESS;
+	}
+	//previous file wasnt closed
+	EnterCriticalSection(&critical_section);
+	HANDLE hFile = CreateFileA(fullpath, GENERIC_READ, 0, NULL, OPEN_EXISTING, FILE_FLAG_OVERLAPPED | FILE_FLAG_SEQUENTIAL_SCAN, NULL);
+	if (hFile == INVALID_HANDLE_VALUE) {
+		int error = GetLastError();
+
+		if (error == ERROR_FILE_NOT_FOUND)
+			return FILE_DOES_NOT_EXISTS;
+		else if (error == ERROR_SHARING_VIOLATION)
+			return FILE_BEING_ACCESSED;
+		else
+			return SERVER_FAIL;
+
+		LeaveCriticalSection(&critical_section);
+
+	}
+	LARGE_INTEGER fileSize;
+	LPFILEOBJ fileobj;
+	LeaveCriticalSection(&critical_section);
+	GetFileSizeEx(hFile, &fileSize);
+	fileobj = GetFileObj(hFile, fileSize.QuadPart, FILEOBJ::RETR);
+	if (fileobj == NULL) {
+		return SERVER_FAIL;
+	}
+	return SUCCESS_DOWNLOAD;
+
+}
 int handleMKDIR(Session &session, char *path) {
 	char fullPath[260];
 	//check if logged in
@@ -769,6 +809,10 @@ int handleMESSAGE(Session& session, string request) {
 		char *temp1 = (char *)filename.c_str();
 		char *temp2 = (char *)filesize.c_str();
 		return handleUpload(session, temp1, temp2);
+	}
+	else if (header == "DOWNLOAD")
+	{
+		return handleDownLoad(session, temp);
 	}
 	else if (header == "PWDIR") {
 		return handlePWDIR(session);

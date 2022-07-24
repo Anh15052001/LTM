@@ -43,6 +43,23 @@ LPFILEOBJ GetFileObj(HANDLE hfile, LONG64 size, FILEOBJ::OP op) {
 
 	return newobj;
 }
+typedef struct Session {
+	//cmd socket
+	SOCKET cmdSock;
+	//file obj use for transmitting file
+	LPFILEOBJ fileobj;
+
+} Session, *LpSession;
+
+LpSession getSession() {
+	LpSession newobj = NULL;
+
+	if ((newobj = (LpSession)GlobalAlloc(GPTR, sizeof(Session))) == NULL)
+		printf("GlobalAlloc() failed with error %d\n", GetLastError());
+
+	return newobj;
+}
+LpSession getSession();
 //Prototype function declaration
 void menu();
 bool service(char *);
@@ -79,6 +96,24 @@ int UploadFile(char*sendMess, char*localFile, char*serverFile)
 	else
 	{
 		return 0;
+	}
+}
+int DownloadFile(LpSession session, char*sendMess, char*localFile, char*serverFile)
+{
+	HANDLE Hfile;
+	Hfile = CreateFileA(localFile, GENERIC_WRITE | DELETE, 0, NULL, CREATE_NEW, FILE_FLAG_SEQUENTIAL_SCAN, NULL);
+	if (Hfile == INVALID_HANDLE_VALUE) {
+		int error = GetLastError();
+		if (error == ERROR_FILE_EXISTS)
+			printf_s("Local file alredy exist");
+		else
+			printf_s("Error: %d", GetLastError());
+		return 0;
+	}
+	else {
+		session->fileobj = GetFileObj(Hfile, 0, FILEOBJ::RETR);
+		sprintf_s(sendMess, BUFF_SIZE, "DOWNLOAD %s", serverFile);
+		return 1;
 	}
 }
 int main(int argc, char* argv[]) {
@@ -265,16 +300,18 @@ bool service(char *message) {
 			//Upload file
 		case 7: {
 			printf_s("===UPLOAD FILE===\n");
-			printf_s(" >>> Enter local file name: ");
+			printf(" >>> Enter local file name: ");
 			gets_s(temp, BUFF_SIZE);
 			printf(" >>> Enter remote file name: ");
 			gets_s(temp1, BUFF_SIZE);
 			strcpy_s(message, BUFF_SIZE, "");
+			
 			if (UploadFile(message, temp, temp1) == 0)
 			{
 				return false;
 			}
-			sprintf_s(message, BUFF_SIZE, "UPLOAD %s", temp);
+			
+			//sprintf_s(message, BUFF_SIZE, "UPLOAD %s", temp1);
 			return true;
 		}
 			//Download file

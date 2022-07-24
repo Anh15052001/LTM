@@ -1,0 +1,9 @@
+﻿  Client.cpp
+e:\ltm\client\streamtransmission.h(25): warning C4267: '=': conversion from 'size_t' to 'int', possible loss of data
+e:\ltm\client\client.cpp(93): warning C4477: 'sprintf_s' : format string '%ld' requires an argument of type 'long', but variadic argument 2 has type 'LONG64'
+  e:\ltm\client\client.cpp(93): note: consider using '%lld' in the format string
+  e:\ltm\client\client.cpp(93): note: consider using '%Id' in the format string
+  e:\ltm\client\client.cpp(93): note: consider using '%I64d' in the format string
+e:\ltm\client\client.cpp(337): warning C4129: 'F': unrecognized character escape sequence
+  Client.vcxproj -> E:\LTM\x64\Debug\Client.exe
+  Client.vcxproj -> E:\LTM\x64\Debug\Client.pdb (Full PDB)
