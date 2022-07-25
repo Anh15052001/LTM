@@ -6,46 +6,15 @@
 #include "CodeStatus.h"
 #include "StreamTransmission.h"
 #include <fstream>
-
 #pragma comment(lib, "Ws2_32.lib")
-
+#define bzero(b,len) (memset((b), '\0', (len)), (void) 0)
 #define SERVER_ADDR "127.0.0.1"
 #define BUFF_SIZE 2048
 
 using namespace std;
 
-#define bzero(b,len) (memset((b), '\0', (len)), (void) 0)
-typedef struct FILEOBJ {
-	//file connection
-	SOCKET fileSock;
-	//file handle
-	HANDLE file;
 
-	int operation;
-	enum OP {
-		//retrieve file
-		RETR,
-		//store file
-		STOR
-	};
-
-	LONG64 size;
-} FILEOBJ, *LPFILEOBJ;
-
-LPFILEOBJ GetFileObj(HANDLE hfile, LONG64 size, FILEOBJ::OP op) {
-	LPFILEOBJ newobj = NULL;
-
-	if ((newobj = (LPFILEOBJ)HeapAlloc(GetProcessHeap(), HEAP_ZERO_MEMORY, sizeof(FILEOBJ))) == NULL)
-		printf("HeapAlloc() failed with error %d\n", GetLastError());
-
-	if (newobj) {
-		newobj->file = hfile;
-		newobj->size = size;
-		newobj->operation = op;
-	}
-
-	return newobj;
-}
+//Prototype function declaration
 void splitString(string input, string& s1, string& s2) {
 	size_t pos = input.find(" ");
 	if (pos != string::npos) {
@@ -74,14 +43,14 @@ void send_file(char*temp, char*temp3, SOCKET sockfd) {
 	for (string response : responseList)
 	{
 		cout << printNotice(stoi(response)) << endl;
-		if (stoi(response)!=200)
+		if (stoi(response) != 200)
 		{
 			return;
 		}
 	}
 
 	printf("\n---> Starting sending....");
-	
+
 	char name[BUFF_SIZE];
 	char mess[BUFF_SIZE] = "UPLOAD ";
 	char zero[2] = " ";
@@ -89,30 +58,30 @@ void send_file(char*temp, char*temp3, SOCKET sockfd) {
 	strcat_s(mess, BUFF_SIZE, name);
 	strcat_s(mess, BUFF_SIZE, zero);
 	while ((fgets(data, BUFF_SIZE, FileIn) != NULL)) {
-		
+
 		strcat_s(mess, BUFF_SIZE, data);
-			
+
 	}
 	int ret = send_stream(sockfd, mess);
-	
+
 	if (ret == SOCKET_ERROR) {
 		printf_s("Error %d: Cannot send data.\n", WSAGetLastError());
 		return;
 	}
-	
+
 	int k = recv_stream(sockfd, responseList);
 	for (string response : responseList)
 	{
 		cout << printNotice(stoi(response)) << endl;
 	}
-	
+
 	bzero(mess, BUFF_SIZE);
 	bzero(name, BUFF_SIZE);
 	bzero(data, BUFF_SIZE);
-	
+
 }
 void solveDownLoad(string message, SOCKET conn)
-{   
+{
 	string filename, content;
 	splitString(message, filename, content);
 	char *temp1 = (char *)filename.c_str();
@@ -122,7 +91,7 @@ void solveDownLoad(string message, SOCKET conn)
 	data_file << temp2;
 	data_file.close();
 	char buff[BUFF_SIZE] = "80";
-	
+
 	int ret = send_stream(conn, buff);
 	if (ret == SOCKET_ERROR) {
 		printf_s("Error %d: Cannot send data.\n", WSAGetLastError());
@@ -141,57 +110,19 @@ void solveDownLoad(string message, SOCKET conn)
 		}
 	}
 }
-//Prototype function declaration
-
 void menu();
 bool service(char *);
-int UploadFile(char*sendMess, char*localFile, char*serverFile)
-{
-	HANDLE Hfile;
-	//open file
-	Hfile = CreateFileA(localFile, GENERIC_READ, 0, NULL, OPEN_EXISTING, FILE_FLAG_SEQUENTIAL_SCAN, NULL);
-	if (Hfile == INVALID_HANDLE_VALUE)
-	{
-		int codeError = GetLastError();
-		if (codeError == ERROR_FILE_NOT_FOUND)
-		{
-			printf_s("Can not find local file");
-		}
-		else
-		{
-			printf_s("Error: %d", codeError);
-		}
-		return 0;
 
-	}
-	LARGE_INTEGER FileSize;
-	if (!GetFileSizeEx(Hfile, &FileSize)) {
-		printf("GetFileSizeEx() failed with error %d\n", GetLastError());
-		return 0;
-	}
-	LPFILEOBJ fileobject = GetFileObj(Hfile, FileSize.QuadPart, FILEOBJ::STOR);
-	if (fileobject != NULL)
-	{
-		sprintf_s(sendMess, BUFF_SIZE, "UPLOAD %s %ld", serverFile, fileobject->size);
-		return 1;
-	}
-	else
-	{
-		return 0;
-	}
-}
 SOCKET client;
-char local_file[BUFF_SIZE];
-int main(int argc, char* argv[]) {
+int main(){
+//int main(int argc, char* argv[]) {
 
-	//Enter the ip address and port entry into command
-	if (argc != 3) {
-		printf_s("Usage: %s <ServerIpAddress> <PortNumber>\n", argv[0]);
+	// Validate the parameters
+	/*if (argc != 3) {
+		printf_s("Usage: %s <ServerIpAddress> <ServerPortNumber>\n", argv[0]);
 		return 1;
 	}
-	char *server_ipaddress = argv[1];
-	int server_port = atoi(argv[2]);
-
+	*/
 	//Inittiate Winsock
 	WSADATA wsaData;
 	WORD wVersion = MAKEWORD(2, 2);
@@ -212,9 +143,11 @@ int main(int argc, char* argv[]) {
 	//Specify server address
 	sockaddr_in serverAddr;
 	serverAddr.sin_family = AF_INET;
-
+	//char *server_ipaddress = argv[1];
+	//int server_port = atoi(argv[2]);
+	int server_port = 5555;
 	serverAddr.sin_port = htons(server_port);
-	inet_pton(AF_INET, server_ipaddress, &serverAddr.sin_addr);
+	inet_pton(AF_INET, "127.0.0.1", &serverAddr.sin_addr);
 
 	//request to connecct server
 	client = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
@@ -235,17 +168,14 @@ int main(int argc, char* argv[]) {
 		bool flag;
 		//Send message
 		flag = service(buff);
-		if (flag == true)
-		{
-			
+		if (flag == true){
 			ret = send_stream(client, buff);
 			if (ret == SOCKET_ERROR) {
 				printf_s("Error %d: Cannot send data.\n", WSAGetLastError());
 				continue;
 			}
 		}
-		else
-		{
+		else{
 			continue;
 		}
 		//Receive echo message
@@ -253,16 +183,13 @@ int main(int argc, char* argv[]) {
 		if (ret == SOCKET_ERROR)
 			printf_s("Error %d: Cannot receive data.\n", WSAGetLastError());
 		else {
-			for (string response : responseList)
-			{
-				//Handle message
-				//Handle message
+			for (string response : responseList) {
 				string header, message;
 				splitString(response, header, message);
 				char *temp = (char *)header.c_str();
 				int k;
 				k = strcmp(temp, "DOWNLOAD");
-				
+
 				if (k == 0)
 				{
 					printf("\n ---> Start Downloading....");
@@ -270,13 +197,20 @@ int main(int argc, char* argv[]) {
 				}
 				else
 				{
-					
-					cout << printNotice(stoi(response)) << endl;
 
+					if (strcmp(temp, "110") == 0) {
+						cout << printNotice(stoi(header)) << endl;
+						cout << message << endl;
+					}
+					else if (strcmp(temp, "120") == 0) {
+						cout << printNotice(stoi(header)) << endl;
+						cout << message << endl;
+					}
+					else
+					{
+						cout << printNotice(stoi(header)) << endl;
+					}
 				}
-				
-			
-				
 			}
 		}
 	}
@@ -308,9 +242,8 @@ void menu() {
 	printf_s("===11. SHOW LIST FILE IN DIRECTORY === \n");
 	printf_s("===12. PRINT WORKING DIRECTORY === \n");
 	printf_s("===13. SHUT DOWN === \n");
-	printf_s("\n@@@@@@@@@@@@@@@@@@@@@@\n");
 	printf_s("Your choice is: \n");
-
+	printf_s("@@@@@@@@@@@@@@@@@@@@@@\n");
 }
 
 /**
@@ -418,7 +351,7 @@ bool service(char *message) {
 		}
 				//Move folder/file to new location
 		case 10: {
-			printf_s("===MOVE FOLDER\FILE===\n");
+			printf_s("===MOVE FOLDER\\FILE===\n");
 			printf_s(" >>> Enter old pathname: ");
 			gets_s(temp, BUFF_SIZE);
 			printf_s(" >>> Enter new pathname: ");
@@ -452,3 +385,5 @@ bool service(char *message) {
 		}
 	}
 }
+
+

@@ -9,7 +9,6 @@ using namespace std;
 #define ACCOUNT_ALREADY_EXISTS 11	
 #define INVALID_NAME 44
 #define SERVER_FAIL 404
-#define REPASSWORD_INCORRECT 405
 
 //Login
 #define SUCCESS_LOGIN 20     
@@ -101,6 +100,7 @@ using namespace std;
 #define UNKNOWN 999
 #define CREATE_REMOTE_FILE 200
 
+
 /**
 *@Functiom printNotice : Print out the message screen
 *@Param [in] code : executable code
@@ -133,6 +133,7 @@ inline string printNotice(int code) {
 	case 72: return "FILE BEING ACCESSED.";
 	case 80: return "SUCCESSFUL DOWNLOAD.";
 	case 81: return "FILE DOES NOT EXISTS.";
+	case 82: return "ALREADY DOWNLOAD.";
 	case 90: return "SUCCESSFUL DELETE.";
 	case 91: return "NOT FILE.";
 	case 100: return "SUCCESSFUL MOVE.";

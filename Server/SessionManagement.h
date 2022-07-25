@@ -11,9 +11,9 @@ private:
 	SOCKET connSock;
 	char * clientIp;
 	int clientPort;
-	char * userName;
+	char userName[260];
 	int status;
-	char *workingDir;
+	char workingDir[260];
 public:
 	Session(SOCKET&, char*, int);
 	void logIn(string &);
@@ -39,8 +39,8 @@ Session::Session(SOCKET& connSock, char* clientIp, int clientPort) {
 	this->connSock = connSock;
 	this->clientIp = _strdup(clientIp);
 	this->clientPort = clientPort;
-	this->userName = _strdup("");
-	this->workingDir = _strdup("");
+	strcpy_s(this->userName, 260, "");
+	strcpy_s(this->workingDir, 260, "");
 	this->status = 0;
 }
 
@@ -49,8 +49,8 @@ Session::Session(SOCKET& connSock, char* clientIp, int clientPort) {
 *@Param [in] username : account name
 **/
 void Session::logIn(string& username) {
-	this->userName = _strdup(username.c_str());
-	this->workingDir = _strdup(username.c_str());
+	strcpy_s(this->userName, 260, username.c_str());
+	strcpy_s(this->workingDir, 260, username.c_str());
 	status = 1;
 }
 
@@ -58,8 +58,8 @@ void Session::logIn(string& username) {
 *@Function logOut : When user logout, change username and login status to status 0
 **/
 void Session::logOut() {
-	this->userName = _strdup("");
-	this->workingDir = _strdup("");
+	strcpy_s(this->userName, 260, "");
+	strcpy_s(this->workingDir, 260, "");
 	status = 0;
 }
 
@@ -106,3 +106,17 @@ void Session::changeWorkingDir(char *iWorkingDir) {
 	strcpy_s(this->workingDir, 260, iWorkingDir);
 }
 
+class criticalSection {
+private:
+	CRITICAL_SECTION &critical_section;
+public:
+	//Constructor criticalSection : request to enter critical section
+	criticalSection(CRITICAL_SECTION &i_critical_section) : critical_section(i_critical_section) {
+		EnterCriticalSection(&critical_section);
+	}
+
+	//destructor criticalSection : Request to get out of the critical section
+	~criticalSection() {
+		LeaveCriticalSection(&critical_section);
+	}
+};

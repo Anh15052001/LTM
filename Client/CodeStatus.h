@@ -9,7 +9,6 @@ using namespace std;
 #define ACCOUNT_ALREADY_EXISTS 11	
 #define INVALID_NAME 44
 #define SERVER_FAIL 404
-#define REPASSWORD_INCORRECT 405
 
 //Login
 #define SUCCESS_LOGIN 20     
@@ -62,6 +61,7 @@ using namespace std;
 #define NO_ACCESS 41
 #define FILE_DOES_NOT_EXISTS 81
 #define FILE_BEING_ACCESSED 72
+#define ALREADY_DOWNLOAD 82
 
 //Delete file
 #define SUCCESS_DELETE 90
@@ -98,6 +98,7 @@ using namespace std;
 
 //Undefined messages
 #define UNKNOWN 999
+#define CREATE_REMOTE_FILE 200
 
 
 /**
@@ -107,41 +108,41 @@ using namespace std;
 **/
 inline string printNotice(int code) {
 	switch (code) {
-	case 10: return "\n ---> SUCCESSFUL REGISTER.";
-	case 11: return "\n ---> ACCOUNT ALREADY EXISTS.";
-	case 20: return "\n ---> SUCCESSFUL LOGIN.";
-	case 21: return "\n ---> ACCOUNT DOES NOT EXIST.";
-	case 22: return "\n ---> PASSWORD INCORECT.";
-	case 23: return "\n ---> ALREADY LOGIN.";
-	case 24: return "\n ---> LOGIN IN ANOTHER CLIENT.";
-	case 30: return "\n ---> SUCCESSFUL LOGOUT";
-	case 31: return "\n ---> NOT LOGIN";
-	case 40: return "\n ---> SUCCESSFUL MAKE DIRECTORY.";
-	case 41: return "\n ---> NO ACCESS.";
-	case 42: return "\n ---> PATH ALREADY EXISTS.";
-	case 43: return "\n ---> PATH NOT FOUND.";
-	case 44: return "\n ---> INVALID DIRECTORY NAME.";
-	case 50: return "\n ---> SUCCESSFUL REMOVE DIRECTORY.";
-	case 51: return "\n ---> CANT REMOVE ROOT DIRECTORY.";
-	case 52: return "\n ---> DIRECTORY NOT EMPTY.";
-	case 53: return "\n ---> NOT DIRECTORY";
-	case 60: return "\n ---> SUCCESSFUL CHANGE WORKING DIRECTORY.";
-	case 61: return "\n ---> INVALID PATH.";
-	case 70: return "\n ---> SUCCESSFUL UPLOAD.";
-	case 71: return "\n ---> FILE ALREADY EXISTS.";
-	case 72: return "\n ---> FILE BEING ACCESSED.";
-	case 80: return "\n ---> SUCCESSFUL DOWNLOAD.";
-	case 81: return "\n ---> FILE DOES NOT EXISTS.";
-	case 90: return "\n ---> SUCCESSFUL DELETE.";
-	case 91: return "\n ---> NOT FILE.";
-	case 200: return "\n ---> CREATE REMOTE FILE SUCCESS";
-	case 100: return "\n ---> SUCCESSFUL MOVE.";
-	case 101: return "\n ---> PATH ALREADY EXISTS.";
-	case 110: return "\n ---> SUCCESSFUL SHOW.";
-	case 120: return "\n ---> SUCCESSFUL PRINT WORKING DIRECTORY.";
-	case 404: return "\n ---> SERVER FAIL.";
-	case 405: return "\n ---> RE PASSWORD INCORRECT.";
-	case 999: return "\n ---> UNDEFINED MESSAGES";
+	case 10: return "SUCCESSFUL REGISTER.";
+	case 11: return "ACCOUNT ALREADY EXISTS.";
+	case 20: return "SUCCESSFUL LOGIN.";
+	case 21: return "ACCOUNT DOES NOT EXIST.";
+	case 22: return "PASSWORD INCORECT.";
+	case 23: return "ALREADY LOGIN.";
+	case 24: return "LOGIN IN ANOTHER CLIENT.";
+	case 30: return "SUCCESSFUL LOGOUT";
+	case 31: return "NOT LOGIN";
+	case 40: return "SUCCESSFUL MAKE DIRECTORY.";
+	case 41: return "NO ACCESS.";
+	case 42: return "PATH ALREADY EXISTS.";
+	case 43: return "PATH NOT FOUND.";
+	case 44: return "INVALID DIRECTORY NAME.";
+	case 50: return "SUCCESSFUL REMOVE DIRECTORY.";
+	case 51: return "CANT REMOVE ROOT DIRECTORY.";
+	case 52: return "DIRECTORY NOT EMPTY.";
+	case 53: return "NOT DIRECTORY";
+	case 60: return "SUCCESSFUL CHANGE WORKING DIRECTORY.";
+	case 61: return "INVALID PATH.";
+	case 70: return "SUCCESSFUL UPLOAD.";
+	case 71: return "FILE ALREADY EXISTS.";
+	case 72: return "FILE BEING ACCESSED.";
+	case 80: return "SUCCESSFUL DOWNLOAD.";
+	case 81: return "FILE DOES NOT EXISTS.";
+	case 82: return "ALREADY DOWNLOAD.";
+	case 90: return "SUCCESSFUL DELETE.";
+	case 91: return "NOT FILE.";
+	case 100: return "SUCCESSFUL MOVE.";
+	case 101: return "PATH ALREADY EXISTS.";
+	case 110: return "SUCCESSFUL SHOW.";
+	case 120: return "SUCCESSFUL PRINT WORKING DIRECTORY.";
+	case 404: return "SERVER FAIL.";
+	case 999: return "UNDEFINED MESSAGES";
+	case 200: return "CREATE REMOTE FILE SUCCESS";
 
 	default: return string();
 	}

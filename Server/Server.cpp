@@ -40,71 +40,35 @@ vector<HANDLE> thread_list;
 //declare a vector containing a list of sessions
 vector<Session> session_list;
 
-//list of accounts in txt file
-map< string, string > account;
-
 //Prototype function declaration
 unsigned _stdcall workerThread(void *);
 void splitString(string, string&, string&);
 bool checkAccess(Session &, char *, char *);
+bool CheckFileExisting(char*);
+auto findUser(string&);
+int handleREGISTER(Session &, string, string);
+int handleLOGIN(Session &, string, string);
+int handleLOGOUT(Session &);
 int handleMKDIR(Session &, char *);
 int handleRMDIR(Session &, char *);
 int handleCWDIR(Session &, char *);
 int handleDELETE(Session &, char *);
 int handleMOV(Session &, char *, char *);
-int handleSHOW(Session &, char *);
-int handleREGISTER(Session &, string, string);
-int handleLOGIN(Session &, string, string);
-auto findUser(string&);
-int handleLOGOUT(Session &);
-int handleMESSAGE(SOCKET, Session&, string);
 int handlePWDIR(Session &);
-typedef struct FILEOBJ {
-	//file connection
-	SOCKET fileSock;
-	//file handle
-	HANDLE file;
-
-	int operation;
-	enum OP {
-		//retrieve file
-		RETR,
-		//store file
-		STOR
-	};
-
-	LONG64 size;
-
-	//for overlapped operation
-	volatile LONG64 bytesSended;
-	volatile LONG64 bytesRecved;
-	volatile LONG64 bytesWritten;
-
-} FILEOBJ, *LPFILEOBJ;
-_Ret_maybenull_ LPFILEOBJ GetFileObj(_In_ HANDLE hfile, _In_ LONG64 size, _In_ FILEOBJ::OP op) {
-	LPFILEOBJ newobj = NULL;
-
-	if ((newobj = (LPFILEOBJ)HeapAlloc(GetProcessHeap(), HEAP_ZERO_MEMORY, sizeof(FILEOBJ))) == NULL)
-		printf("HeapAlloc() failed with error %d\n", GetLastError());
-
-	if (newobj) {
-		newobj->file = hfile;
-		newobj->size = size;
-		newobj->operation = op;
-	}
-
-	return newobj;
-}
-//Run the program
+int handleSHOW(Session &, char *);
+int handleMESSAGE(SOCKET conn, Session&, string);
+char buffer[BUFF_SIZE];
 
 SOCKET listenSock;
-int main(int argc, char* argv[]) {
+//Run the program
+int main(){
+//int main(int argc, char* argv[]) {
 
 	// Validate the parameters
-	if (argc != 2) {
+	/*if (argc != 2) {
 		printf_s("Usage: %s <PortNumber>\n", argv[0]);
 		return 1;
-	}
+	}*/
 
 	//Initiate Winsock
 	WSADATA wsaData;
@@ -124,7 +88,8 @@ int main(int argc, char* argv[]) {
 	//Bind address to socket
 	sockaddr_in serverAddr;
 	serverAddr.sin_family = AF_INET;
-	int server_port = atoi(argv[1]);
+	//int server_port = atoi(argv[1]);
+	int server_port = 5555;
 	serverAddr.sin_port = htons(server_port);
 	inet_pton(AF_INET, SERVER_ADDR, &serverAddr.sin_addr);
 
@@ -151,6 +116,7 @@ int main(int argc, char* argv[]) {
 	int ret, nEvents, clientAddrLen, clientPort;
 	char clientIP[INET_ADDRSTRLEN];
 	vector<string> requestList;
+	//char buff[BUFF_SIZE];
 	char buff[BUFF_SIZE];
 	fd_set readfds, initfds; //use initfds to initiate readfds at the begining of every loop step
 
@@ -241,16 +207,23 @@ int main(int argc, char* argv[]) {
 						for (string request : requestList) {
 							printf_s("Receive from client[%s:%d] %s\n", clientIP, clientPort, request.c_str());
 							//Handle
-							int echo = handleMESSAGE(socket ,*itr, request);
+							int echo = handleMESSAGE(socket, *itr, request);
 							sprintf_s(buff, BUFF_SIZE, "%d", echo);
 
-							//Send result
-							ret = send_stream(socket, buff);
-							if (ret == SOCKET_ERROR) {
-								printf_s("Error %d: Cannot send data.\n", WSAGetLastError());
-								break;
+							if (strcmp(buff, "110") == 0) {
+								ret = send_stream(socket, buffer);
 							}
-							
+							else if (strcmp(buff, "120") == 0) {
+								ret = send_stream(socket, buffer);
+							}
+							else {
+								//Send result
+								ret = send_stream(socket, buff);
+								if (ret == SOCKET_ERROR) {
+									printf_s("Error %d: Cannot send data.\n", WSAGetLastError());
+									break;
+								}
+							}
 						}
 					}
 				}//End if
@@ -282,6 +255,7 @@ unsigned _stdcall workerThread(void *param) {
 	fd_set readfds, initfds; //use initfds to initiate readfds at the begining of every loop step
 	int nEvents, ret;
 	vector<string> requestList;
+	//char buff[BUFF_SIZE];
 	char buff[BUFF_SIZE];
 
 	FD_ZERO(&initfds); //Initialize the fd_set with the value NULL
@@ -328,11 +302,19 @@ unsigned _stdcall workerThread(void *param) {
 							int echo = handleMESSAGE(sock, *itr, request);
 							sprintf_s(buff, BUFF_SIZE, "%d", echo);
 
-							//Send result
-							ret = send_stream(sock, buff);
-							if (ret == SOCKET_ERROR) {
-								printf_s("Error %d: Cannot send data.\n", WSAGetLastError());
-								break;
+							if (strcmp(buff, "110") == 0) {
+								ret = send_stream(sock, buffer);
+							}
+							else if (strcmp(buff, "120") == 0) {
+								ret = send_stream(sock, buffer);
+							}
+							else {
+								//Send result
+								ret = send_stream(sock, buff);
+								if (ret == SOCKET_ERROR) {
+									printf_s("Error %d: Cannot send data.\n", WSAGetLastError());
+									break;
+								}
 							}
 						}
 					}
@@ -348,27 +330,6 @@ unsigned _stdcall workerThread(void *param) {
 	return 0;
 }
 
-/**
-*@Function findUser : Find location by username in session list
-*@Param [in] username : user account
-**/
-auto findUser(string& username) {
-	EnterCriticalSection(&critical_section);
-	auto pos = find_if(session_list.begin(), session_list.end(), [username](Session session) {
-		return username == session.getUserName();
-	});
-	LeaveCriticalSection(&critical_section);
-	return pos;
-}
-
-/**
-*@Function splitString : If the input string is disconnexion by delimeter " "
-,then split the input string into 2 strings s1 and s2.
-*@Param1 [in] input : input string to split
-*@Param2 [out] s1 : string s1
-*@Param3 [out] s2 : string s2
-*@Example : input (tungbt 0) --> s1 (tungbt) , s2(0)
-**/
 void splitString(string input, string& s1, string& s2) {
 	size_t pos = input.find(" ");
 	if (pos != string::npos) {
@@ -377,8 +338,27 @@ void splitString(string input, string& s1, string& s2) {
 	}
 	else s1 = input;
 }
-bool CheckFileExisting(char* file_name)
-{
+
+bool checkAccess(Session &session, char *path, char *fullPath)	 {
+	char rootPath[MAX_PATH];
+	char temp[MAX_PATH];
+
+	if (strstr(path, "~") == path)
+		sprintf_s(temp, MAX_PATH, "%s%s", session.getUserName(), strlen(path) > 1 ? path + 1 : "");
+	else
+		sprintf_s(temp, MAX_PATH, "%s%s%s", session.getWorkingDir(), "\\", path);
+
+	DWORD rootLength = GetFullPathNameA(session.getUserName(), MAX_PATH, rootPath, NULL);
+	DWORD pathLength = GetFullPathNameA(temp, MAX_PATH, fullPath, NULL);
+
+	if (rootLength != 0 && pathLength != 0 && strstr(fullPath, rootPath) == fullPath) {
+		return TRUE;
+	}
+	//path invalid or dont start root path
+	strcpy_s(fullPath, MAX_PATH, "");
+	return FALSE;
+}
+bool CheckFileExisting(char* file_name){
 	//return true: file exist
 	//return false: otherwise
 	bool is_exist = true;
@@ -392,26 +372,6 @@ bool CheckFileExisting(char* file_name)
 	data_file.close();
 
 	return is_exist;
-}
-
-bool checkAccess(Session &session, char *path, char *fullPath) {
-	char rootPath[260];
-	char temp[260];
-
-	if (strstr(path, "~") == path)
-		sprintf_s(temp, 260, "%s%s", session.getUserName(), strlen(path) > 1 ? path + 1 : "");
-	else
-		sprintf_s(temp, 260, "%s%s%s", session.getWorkingDir(), "\\", path);
-
-	DWORD rootLength = GetFullPathNameA(session.getUserName(), 260, rootPath, NULL);
-	DWORD pathLength = GetFullPathNameA(temp, 260, fullPath, NULL);
-
-	if (rootLength != 0 && pathLength != 0 && strstr(fullPath, rootPath) != rootPath) {
-		return TRUE;
-	}
-	//path invalid or dont start root path
-	strcpy_s(fullPath, 260, "");
-	return FALSE;
 }
 int Upload(Session &session, char*filename)
 {
@@ -430,7 +390,7 @@ int Upload(Session &session, char*filename)
 	{
 		return FILE_ALREADY_EXISTS;
 	}
-	
+
 	return CREATE_REMOTE_FILE;
 
 }
@@ -453,9 +413,83 @@ int DownLoad(Session &session, char*filename)
 	}
 	return ALREADY_DOWNLOAD;
 }
+/**
+*@Function findUser : Find location by username in session list
+*@Param [in] username : user account
+**/
+auto findUser(string& username) {
+	EnterCriticalSection(&critical_section);
+	auto pos = find_if(session_list.begin(), session_list.end(), [username](Session session) {
+		return username == session.getUserName();
+	});
+	LeaveCriticalSection(&critical_section);
+	return pos;
+}
+
+int handleREGISTER(Session &session, string username, string password) {
+	string userName = username;
+	string passWord = password;
+	criticalSection cs(critical_section);
+	if (CreateDirectoryA(username.c_str(), NULL)==0) {
+		DWORD error = GetLastError();
+		printf_s("Create directory failed with error %d\n", error);
+		if (error == ERROR_ALREADY_EXISTS) {
+			return ACCOUNT_ALREADY_EXISTS;
+		}
+		else if (error == ERROR_INVALID_NAME) {
+			return INVALID_NAME;
+		}
+		else 
+			return SERVER_FAIL;
+	}
+	else {
+		ofstream outf{ file, ios::app };
+		outf << userName << ' ' << passWord << '\n';
+		return SUCCESS_REGISTER;
+	}
+}
+
+int handleLOGIN(Session &session, string username, string password) {
+	criticalSection cs(critical_section);
+	ifstream ifs(file, ios::in);
+	//Client already login
+	if (session.loginStatus() == 1) {
+		return ALREADY_LOGIN;
+	}
+	auto pos = findUser(username);
+	//Account login in a another session
+	if (pos != session_list.end()) {
+		return LOGIN_IN_ANOTHER_CLIENT;
+	}
+	string input, s1, s2;
+	while (ifs) {
+		getline(ifs, input, '\n');
+		splitString(input, s1, s2);
+		if (strcmp(s1.c_str(), username.c_str()) == 0) {
+			if (strcmp(s2.c_str(), password.c_str()) == 0) {
+				session.logIn(username);
+				return SUCCESS_LOGIN;
+			}
+			else return PASSWORD_INCORRECT;
+		}
+	}
+	return ACCOUNT_DOES_NOT_EXIST;
+}
+
+int handleLOGOUT(Session &session) {
+	criticalSection cs(critical_section);
+	//Logout successful
+	if (session.loginStatus()) {
+		session.logOut();
+		return SUCCESS_LOGOUT;
+	}
+	//Not login
+	else 
+		return NOT_LOGIN;
+}
 
 int handleMKDIR(Session &session, char *path) {
-	char fullPath[260];
+	char fullPath[MAX_PATH];
 	//check if logged in
 	if (session.loginStatus() == 0) {
 		return NOT_LOGIN;
@@ -464,27 +498,29 @@ int handleMKDIR(Session &session, char *path) {
 	if (!checkAccess(session, path, fullPath)) {
 		return NO_ACCESS;
 	}
-
 	if (CreateDirectoryA(fullPath, NULL)) {
 		return SUCCESS_MAKE_DIRECTORY;
 	}
 	else {
 		DWORD error = GetLastError();
 		printf_s("Create directory failed with error %d\n", error);
-		if (error == ERROR_PATH_NOT_FOUND)
+		if (error == ERROR_PATH_NOT_FOUND) {
 			return PATH_NOT_FOUND;
-		else if (error == ERROR_ALREADY_EXISTS)
+		}
+		else if (error == ERROR_ALREADY_EXISTS) {
 			return ALREADY_EXISTS;
-		else if (error == ERROR_INVALID_NAME)
+		}
+		else if (error == ERROR_INVALID_NAME) {
 			return INVALID_NAME;
+		}
 		else
 			return SERVER_FAIL;
 	}
 }
 
 int handleRMDIR(Session &session, char *path) {
-	char fullPath[260];
-	char rootPath[260];
+	char fullPath[MAX_PATH];
+	char rootPath[MAX_PATH];
 	//Check if logged in
 	if (session.loginStatus() == 0) {
 		return NOT_LOGIN;
@@ -497,7 +533,7 @@ int handleRMDIR(Session &session, char *path) {
 		return CANT_REMOVE;
 	}
 	//Remove directory
-	EnterCriticalSection(&critical_section);
+	criticalSection cs(critical_section);
 	if (RemoveDirectoryA(fullPath)) {
 		return SUCCESS_REMOVE_DIRECTORY;
 	}
@@ -513,15 +549,13 @@ int handleRMDIR(Session &session, char *path) {
 		else if (error == ERROR_DIRECTORY) {
 			return NOT_DIRECTORY;
 		}
-		else
-			return SERVER_FAIL;
+		else 
+			return SERVER_FAIL;	
 	}
-
-	LeaveCriticalSection(&critical_section);
 }
 
-int	handleCWDIR(Session &session, char *path) {
-	char fullPath[260];
+int handleCWDIR(Session &session, char *path) {
+	char fullPath[MAX_PATH];
 	char fileData[BUFF_SIZE];
 	HANDLE find;
 	//Check if logged in
@@ -529,7 +563,7 @@ int	handleCWDIR(Session &session, char *path) {
 		return NOT_LOGIN;
 	}
 	//Check length of path
-	if (strlen(path) == 0 || strlen(path) > 260) {
+	if (strlen(path) == 0 || strlen(path) > MAX_PATH) {
 		return INVALID_PATH;
 	}
 	//Check validity of directory entered
@@ -539,8 +573,9 @@ int	handleCWDIR(Session &session, char *path) {
 	//Change working directory
 	find = FindFirstFileExA(fullPath, FindExInfoBasic, fileData, FindExSearchLimitToDirectories, NULL,
 		FIND_FIRST_EX_CASE_SENSITIVE);
-	if (find == INVALID_HANDLE_VALUE)
+	if (find == INVALID_HANDLE_VALUE) {
 		return PATH_NOT_FOUND;
+	}
 	else {
 		session.changeWorkingDir(fullPath);
 		return SUCCESS_CHANGE_WORKING_DIRECTORY;
@@ -549,8 +584,8 @@ int	handleCWDIR(Session &session, char *path) {
 }
 
 int handleDELETE(Session &session, char *path) {
-	char fullPath[260];
-	char rootPath[260];
+	char fullPath[MAX_PATH];
+	char rootPath[MAX_PATH];
 	//Check if logged in
 	if (session.loginStatus() == 0) {
 		return NOT_LOGIN;
@@ -560,7 +595,7 @@ int handleDELETE(Session &session, char *path) {
 		return NO_ACCESS;
 	}
 
-	EnterCriticalSection(&critical_section);
+	criticalSection cs(critical_section);
 	//Delete file
 	if (DeleteFileA(fullPath)) {
 		return SUCCESS_DELETE;
@@ -568,22 +603,20 @@ int handleDELETE(Session &session, char *path) {
 	else {
 		DWORD error = GetLastError();
 		printf_s("Delete file failed with error %d\n", error);
-		if (error == ERROR_FILE_NOT_FOUND || error == ERROR_PATH_NOT_FOUND)
+		if (error == ERROR_FILE_NOT_FOUND || error == ERROR_PATH_NOT_FOUND) {
 			return FILE_DOES_NOT_EXISTS;
-		else if (error == ERROR_SHARING_VIOLATION)
+		}
+		else if (error == ERROR_SHARING_VIOLATION) {
 			return FILE_BEING_ACCESSED;
-		else if (error == ERROR_ACCESS_DENIED)
-			return NOT_FILE;
-		else
+		}
+		else 
 			return SERVER_FAIL;
 	}
-
-	LeaveCriticalSection(&critical_section);
 }
 
 int handleMOV(Session &session, char *oldPath, char *newPath) {
-	char fullOldPath[260];
-	char fullNewPath[260];
+	char fullOldPath[MAX_PATH];
+	char fullNewPath[MAX_PATH];
 	//Check if logged in
 	if (session.loginStatus() == 0) {
 		return NOT_LOGIN;
@@ -593,14 +626,14 @@ int handleMOV(Session &session, char *oldPath, char *newPath) {
 		return NO_ACCESS;
 	}
 
-	EnterCriticalSection(&critical_section);
+	criticalSection cs(critical_section);
 	//Move File
 	if (MoveFileA(fullOldPath, fullNewPath)) {
 		return SUCCESS_MOVE;
 	}
 	else {
 		DWORD error = GetLastError();
-		printf("Move file failed with error %d\n", error);
+		printf_s("Move file failed with error %d\n", error);
 		if (error == ERROR_ALREADY_EXISTS)
 			return PATH_ALREADY_EXISTS;
 		else if (error == ERROR_FILE_NOT_FOUND)
@@ -614,12 +647,32 @@ int handleMOV(Session &session, char *oldPath, char *newPath) {
 		else
 			return SERVER_FAIL;
 	}
+}
 
-	LeaveCriticalSection(&critical_section);
+int handlePWDIR(Session &session) {
+	char workingDir[MAX_PATH] = "";
+	char rootPath[MAX_PATH] = "", workingPath[MAX_PATH] = "";
+	DWORD rootlength;
+
+	//Check if logged in
+	if (session.loginStatus() == 0) {
+		return NOT_LOGIN;
+	}
+
+	//Get full root
+	rootlength = GetFullPathNameA(session.getUserName(), MAX_PATH, rootPath, NULL);
+	//Get full working dir
+	checkAccess(session, ".", workingPath);
+
+	//Get short form of working dir
+	sprintf_s(workingDir, MAX_PATH, "%s%s", "~", strstr(workingPath, rootPath) + strlen(rootPath));
+	//printf_s("%s", workingDir);
+	sprintf_s(buffer, 260, "120 %s", workingDir);
+	return SUCCESS_PRINT;
 }
 
 int handleSHOW(Session &session, char *path) {
-	char fullPath[260];
+	char fullPath[MAX_PATH];
 	//Check if logged in
 	if (session.loginStatus() == 0) {
 		return NOT_LOGIN;
@@ -645,12 +698,12 @@ int handleSHOW(Session &session, char *path) {
 		do {
 			string name = data.cFileName;
 			if (name != "." && name != "..") {
-				name += "\n";
+				name += " ";
 				names += name;
 			}
 		} while (FindNextFileA(hFind, &data));
 
-		printf_s("List file : %s", names.c_str());
+		sprintf_s(buffer, 260, "110 %s", names.c_str());
 		return SUCCESS_SHOW;
 	}
 	else {
@@ -659,126 +712,59 @@ int handleSHOW(Session &session, char *path) {
 	FindClose(hFind);
 }
 
-int handleREGISTER(Session &session, string username, string password) {
-	string userName = username;
-	string passWord = password;
-	EnterCriticalSection(&critical_section);
-	if (!CreateDirectoryA(username.c_str(), NULL)) {
-		DWORD error = GetLastError();
-		printf_s("Create directory failed with error %d\n", error);
-		if (error == ERROR_ALREADY_EXISTS)
-			return ACCOUNT_ALREADY_EXISTS;
-		else if (error == ERROR_INVALID_NAME)
-			return INVALID_NAME;
-		else
-			return SERVER_FAIL;
-	}
-	else {
-		ofstream outf{ file, ios::app };
-		outf << userName << ' ' << passWord << '\n';
-		return SUCCESS_REGISTER;
-	}
-
-}
-
-int handleLOGIN(Session &session, string username, string password) {
-	ifstream ifs(file, ios::in);
-	//Client already login
-	if (session.loginStatus() == 1) {
-		return ALREADY_LOGIN;
-	}
-	auto pos = findUser(username);
-	//Account login in a another session
-	if (pos != session_list.end())
-		return LOGIN_IN_ANOTHER_CLIENT;
-	string input, s1, s2;
-	while (ifs) {
-		getline(ifs, input, '\n');
-		splitString(input, s1, s2);
-		if (strcmp(s1.c_str(), username.c_str()) == 0) {
-			if (strcmp(s2.c_str(), password.c_str()) == 0) {
-				session.logIn(username);
-				return SUCCESS_LOGIN;
-			}
-			else return PASSWORD_INCORRECT;
-		}
-	}
-	return ACCOUNT_DOES_NOT_EXIST;
-}
-
-
-int handleLOGOUT(Session &session) {
-	//Logout successful
-	if (session.loginStatus()) {
-		session.logOut();
-		return SUCCESS_LOGOUT;
-	}
-	//Not login
-	else return NOT_LOGIN;
-}
-
-int handlePWDIR(Session &session) {
-	char workingDir[260] = "";
-	char rootPath[260] = "", workingPath[260] = "";
-	DWORD rootlength;
-
-	//Check if logged in
-	if (session.loginStatus() == 0) {
-		return NOT_LOGIN;
-	}
-
-	//Get full root
-	rootlength = GetFullPathNameA(session.getUserName(), 260, rootPath, NULL);
-	//Get full working dir
-	checkAccess(session, ".", workingPath);
-
-	//Get short form of working dir
-	sprintf_s(workingDir, MAX_PATH, "%s%s", "~", strstr(workingPath, rootPath) + strlen(rootPath));
-	return SUCCESS_PRINT;
-}
-
 int handleMESSAGE(SOCKET conn, Session& session, string request) {
-	string header, message, username, password, oldPath, newPath, filename, content;
+	string header, message, username, password, oldPath, newPath,filename, content;
+	splitString(request, header, message);
 	char *temp = (char *)message.c_str();
 
-	splitString(request, header, message);
 	if (header == "LOGIN") {
 		splitString(message, username, password);
 		return handleLOGIN(session, username, password);
 	}
+
 	else if (header == "LOGOUT") {
 		return handleLOGOUT(session);
 	}
+
 	else if (header == "REGISTER") {
 		splitString(message, username, password);
 		return handleREGISTER(session, username, password);
 	}
-	else if (header == "REPASSWORD")
-	{
-		return REPASSWORD_INCORRECT;
-	}
+
 	else if (header == "MKDIR") {
 		return handleMKDIR(session, temp);
 	}
+
 	else if (header == "RMDIR") {
 		return handleRMDIR(session, temp);
 	}
+
 	else if (header == "CWDIR") {
 		return handleCWDIR(session, temp);
 	}
+
 	else if (header == "DELETE") {
 		return handleDELETE(session, temp);
 	}
+
 	else if (header == "MOV") {
 		splitString(message, oldPath, newPath);
 		char *temp1 = (char *)oldPath.c_str();
 		char *temp2 = (char *)newPath.c_str();
 		return handleMOV(session, temp1, temp2);
 	}
-	else if (header == "UPLOAD")
-	{
+
+	else if (header == "PWDIR") {
+		return handlePWDIR(session);
+	}
+
+	else if (header == "SHOW") {
+		return handleSHOW(session, temp);
+	}
+
+	else if (header == "UPLOAD") {
 		splitString(message, filename, content);
-		
+
 		char *temp1 = (char *)filename.c_str();
 		char *temp2 = (char *)content.c_str();
 
@@ -792,14 +778,14 @@ int handleMESSAGE(SOCKET conn, Session& session, string request) {
 	{
 		return Upload(session, temp);
 	}
-	else if (header == "DOWNLOAD")
-	{   
+
+	else if (header == "DOWNLOAD"){
 		string buff1, buff2;
 		splitString(message, buff1, buff2);
 		char *local_file = (char *)buff1.c_str();
 		char *remote_file = (char *)buff2.c_str();
 		int n = DownLoad(session, remote_file);
-		if (n==82)
+		if (n == 82)
 		{
 			errno_t file_in;
 			FILE *FileIn;
@@ -815,20 +801,20 @@ int handleMESSAGE(SOCKET conn, Session& session, string request) {
 			strcat_s(mess, BUFF_SIZE, name);
 			strcat_s(mess, BUFF_SIZE, zero);
 			while ((fgets(data, BUFF_SIZE, FileIn) != NULL)) {
-				
-				
-				
+
+
+
 				strcat_s(mess, BUFF_SIZE, data);
 
-				
+
 			}
 			int ret = send_stream(conn, mess);
-			
+
 			if (ret == SOCKET_ERROR) {
 				printf_s("Error %d: Cannot send data.\n", WSAGetLastError());
 				return SERVER_FAIL;
 			}
-			
+
 			int k = recv_stream(conn, responseList);
 			for (string response : responseList)
 			{
@@ -838,34 +824,20 @@ int handleMESSAGE(SOCKET conn, Session& session, string request) {
 					return SUCCESS_DOWNLOAD;
 				}
 			}
-			
+
 			bzero(mess, BUFF_SIZE);
 			bzero(name, BUFF_SIZE);
 			bzero(data, BUFF_SIZE);
-			
-		
+
+
 		}
 		else
 		{
 			return n;
 		}
 	}
-	
-	else if (header == "PWDIR") {
-		return handlePWDIR(session);
-	}
-	else if (header == "SHOW") {
-		return handleSHOW(session, temp);
-	}
-	else
-	{
-		fstream data_file;
-		printf("Header: %s", header.c_str());
-		data_file.open(header.c_str(), ios::out | ios::app);
-		data_file << message.c_str();
-		data_file.close();
-		return SUCCESS_UPLOAD;
-	}
-}
 
+	else
+		return UNKNOWN;
+}
 

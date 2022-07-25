@@ -1,0 +1,8 @@
+﻿  Test.cpp
+c:\users\admin\documents\visual studio 2015\projects\hw03_dat_chuan\test\test.cpp(201): warning C4101: 'buff': unreferenced local variable
+c:\users\admin\documents\visual studio 2015\projects\hw03_dat_chuan\test\test.cpp(255): warning C4101: 'buff': unreferenced local variable
+c:\users\admin\documents\visual studio 2015\projects\hw03_dat_chuan\test\test.cpp(374): warning C4715: 'thread1': not all control paths return a value
+c:\users\admin\documents\visual studio 2015\projects\hw03_dat_chuan\test\test.cpp(429): warning C4715: 'thread2': not all control paths return a value
+c:\users\admin\documents\visual studio 2015\projects\hw03_dat_chuan\test\test.cpp(311): warning C4715: 'thread': not all control paths return a value
+  Test.vcxproj -> c:\users\admin\documents\visual studio 2015\Projects\HW03_DAT_CHUAN\Debug\Test.exe
+  Test.vcxproj -> c:\users\admin\documents\visual studio 2015\Projects\HW03_DAT_CHUAN\Debug\Test.pdb (Full PDB)
