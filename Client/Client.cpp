@@ -5,6 +5,7 @@
 #include <winsock2.h>
 #include "CodeStatus.h"
 #include "StreamTransmission.h"
+#include <fstream>
 
 #pragma comment(lib, "Ws2_32.lib")
 
@@ -45,6 +46,14 @@ LPFILEOBJ GetFileObj(HANDLE hfile, LONG64 size, FILEOBJ::OP op) {
 
 	return newobj;
 }
+void splitString(string input, string& s1, string& s2) {
+	size_t pos = input.find(" ");
+	if (pos != string::npos) {
+		s1 = input.substr(0, pos);
+		s2 = input.substr(pos + 1);
+	}
+	else s1 = input;
+}
 void send_file(char*temp, char*temp3, SOCKET sockfd) {
 	errno_t file_in;
 	FILE *FileIn;
@@ -72,50 +81,68 @@ void send_file(char*temp, char*temp3, SOCKET sockfd) {
 	}
 
 	printf("\n---> Starting sending....");
-	int temp1 = 0;
-	int temp2 = 0;
-	char name[BUFF_SIZE];
 	
+	char name[BUFF_SIZE];
+	char mess[BUFF_SIZE] = "UPLOAD ";
 	char zero[2] = " ";
-	bool flag = false;
+	strcpy_s(name, BUFF_SIZE, temp3);
+	strcat_s(mess, BUFF_SIZE, name);
+	strcat_s(mess, BUFF_SIZE, zero);
 	while ((fgets(data, BUFF_SIZE, FileIn) != NULL)) {
-		char mess[BUFF_SIZE] = "UPLOAD ";
-		strcpy_s(name, BUFF_SIZE, temp3);
-		strcat_s(mess, BUFF_SIZE, name);
-		strcat_s(mess, BUFF_SIZE, zero);
-		strcat_s(mess, BUFF_SIZE, data);
-		printf("name: %s", mess);
-			
 		
-		int ret = send_stream(sockfd, mess);
-		temp1++;
-		if (ret == SOCKET_ERROR) {
-			printf_s("Error %d: Cannot send data.\n", WSAGetLastError());
-			continue;
-		}
-		int k = recv_stream(sockfd, responseList);
+		strcat_s(mess, BUFF_SIZE, data);
+			
+	}
+	int ret = send_stream(sockfd, mess);
+	
+	if (ret == SOCKET_ERROR) {
+		printf_s("Error %d: Cannot send data.\n", WSAGetLastError());
+		return;
+	}
+	
+	int k = recv_stream(sockfd, responseList);
+	for (string response : responseList)
+	{
+		cout << printNotice(stoi(response)) << endl;
+	}
+	
+	bzero(mess, BUFF_SIZE);
+	bzero(name, BUFF_SIZE);
+	bzero(data, BUFF_SIZE);
+	
+}
+void solveDownLoad(string message, SOCKET conn)
+{   
+	string filename, content;
+	splitString(message, filename, content);
+	char *temp1 = (char *)filename.c_str();
+	char *temp2 = (char *)content.c_str();
+	fstream data_file;
+	data_file.open(temp1, ios::out | ios::app);
+	data_file << temp2;
+	data_file.close();
+	char buff[BUFF_SIZE] = "80";
+	
+	int ret = send_stream(conn, buff);
+	if (ret == SOCKET_ERROR) {
+		printf_s("Error %d: Cannot send data.\n", WSAGetLastError());
+		return;
+	}
+	vector<string> responseList;
+	int ret1 = recv_stream(conn, responseList);
+	if (ret1 == SOCKET_ERROR)
+	{
+		printf_s("Error %d: Cannot receive data.\n", WSAGetLastError());
+	}
+	else {
 		for (string response : responseList)
 		{
 			cout << printNotice(stoi(response)) << endl;
-			if (stoi(response)==70)
-			{
-				temp2++;
-			}
 		}
-		bzero(mess, BUFF_SIZE);
-		bzero(name, BUFF_SIZE);
-		bzero(data, BUFF_SIZE);
-	}
-	if (temp1==temp2)
-	{
-		printf("\n---> UPLOAD SUCCESS");
-	}
-	else
-	{
-		printf("\n---> SERVER FAIL");
 	}
 }
 //Prototype function declaration
+
 void menu();
 bool service(char *);
 int UploadFile(char*sendMess, char*localFile, char*serverFile)
@@ -230,8 +257,25 @@ int main(int argc, char* argv[]) {
 			{
 				//Handle message
 				//Handle message
-				cout << printNotice(stoi(response)) << endl;
+				string header, message;
+				splitString(response, header, message);
+				char *temp = (char *)header.c_str();
+				int k;
+				k = strcmp(temp, "DOWNLOAD");
+				
+				if (k == 0)
+				{
+					printf("\n ---> Start Downloading....");
+					solveDownLoad(message, client);
+				}
+				else
+				{
+					
+					cout << printNotice(stoi(response)) << endl;
 
+				}
+				
+			
 				
 			}
 		}
@@ -352,7 +396,6 @@ bool service(char *message) {
 			strcpy_s(message, BUFF_SIZE, "");
 			printf_s(" ---> Upload file %s ...", temp);
 			send_file(temp, temp1, client);
-			//sprintf_s(message, BUFF_SIZE, "UPLOAD %s", temp1);
 			return false;
 		}
 				//Download file
@@ -362,7 +405,7 @@ bool service(char *message) {
 			gets_s(temp, BUFF_SIZE);
 			printf_s(" >>> Enter remote file name: ");
 			gets_s(temp1, BUFF_SIZE);
-			sprintf_s(message, BUFF_SIZE, "DOWNLOAD %s", temp);
+			sprintf_s(message, BUFF_SIZE, "DOWNLOAD %s %s", temp, temp1);
 			return true;
 		}
 				//Delete file

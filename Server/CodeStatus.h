@@ -62,6 +62,7 @@ using namespace std;
 #define NO_ACCESS 41
 #define FILE_DOES_NOT_EXISTS 81
 #define FILE_BEING_ACCESSED 72
+#define ALREADY_DOWNLOAD 82
 
 //Delete file
 #define SUCCESS_DELETE 90

@@ -57,7 +57,7 @@ int handleREGISTER(Session &, string, string);
 int handleLOGIN(Session &, string, string);
 auto findUser(string&);
 int handleLOGOUT(Session &);
-int handleMESSAGE(Session&, string);
+int handleMESSAGE(SOCKET, Session&, string);
 int handlePWDIR(Session &);
 typedef struct FILEOBJ {
 	//file connection
@@ -96,7 +96,8 @@ _Ret_maybenull_ LPFILEOBJ GetFileObj(_In_ HANDLE hfile, _In_ LONG64 size, _In_ F
 	return newobj;
 }
 //Run the program
-char *filename1;
+
+SOCKET listenSock;
 int main(int argc, char* argv[]) {
 
 	// Validate the parameters
@@ -114,7 +115,7 @@ int main(int argc, char* argv[]) {
 	}
 
 	//Construct socket
-	SOCKET listenSock = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+	listenSock = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
 	if (listenSock == INVALID_SOCKET) {
 		printf_s("Error %d: Cannot create server socket.", WSAGetLastError());
 		return 0;
@@ -240,7 +241,7 @@ int main(int argc, char* argv[]) {
 						for (string request : requestList) {
 							printf_s("Receive from client[%s:%d] %s\n", clientIP, clientPort, request.c_str());
 							//Handle
-							int echo = handleMESSAGE(*itr, request);
+							int echo = handleMESSAGE(socket ,*itr, request);
 							sprintf_s(buff, BUFF_SIZE, "%d", echo);
 
 							//Send result
@@ -324,7 +325,7 @@ unsigned _stdcall workerThread(void *param) {
 						for (string request : requestList) {
 							printf_s("Receive from client[%s:%d] %s\n", clientIP, clientPort, request.c_str());
 							//Handle
-							int echo = handleMESSAGE(*itr, request);
+							int echo = handleMESSAGE(sock, *itr, request);
 							sprintf_s(buff, BUFF_SIZE, "%d", echo);
 
 							//Send result
@@ -448,9 +449,9 @@ int DownLoad(Session &session, char*filename)
 	}
 	if (!CheckFileExisting(filename))
 	{
-		return FILE_ALREADY_EXISTS;
+		return FILE_DOES_NOT_EXISTS;
 	}
-	return SUCCESS_DOWNLOAD;
+	return ALREADY_DOWNLOAD;
 }
 
 int handleMKDIR(Session &session, char *path) {
@@ -736,7 +737,7 @@ int handlePWDIR(Session &session) {
 	return SUCCESS_PRINT;
 }
 
-int handleMESSAGE(Session& session, string request) {
+int handleMESSAGE(SOCKET conn, Session& session, string request) {
 	string header, message, username, password, oldPath, newPath, filename, content;
 	char *temp = (char *)message.c_str();
 
@@ -780,10 +781,8 @@ int handleMESSAGE(Session& session, string request) {
 		
 		char *temp1 = (char *)filename.c_str();
 		char *temp2 = (char *)content.c_str();
-		int k = Upload(session, temp1);
 
 		fstream data_file;
-		printf("\n Text: %s", temp2);
 		data_file.open(temp1, ios::out | ios::app);
 		data_file << temp2;
 		data_file.close();
@@ -795,12 +794,60 @@ int handleMESSAGE(Session& session, string request) {
 	}
 	else if (header == "DOWNLOAD")
 	{   
-		int n = DownLoad(session, temp);
-		if (n==80)
+		string buff1, buff2;
+		splitString(message, buff1, buff2);
+		char *local_file = (char *)buff1.c_str();
+		char *remote_file = (char *)buff2.c_str();
+		int n = DownLoad(session, remote_file);
+		if (n==82)
 		{
 			errno_t file_in;
 			FILE *FileIn;
-			file_in = fopen_s(&FileIn, temp, "r");
+			file_in = fopen_s(&FileIn, remote_file, "r");
+			char data[BUFF_SIZE] = { 0 };
+			vector<string> responseList;
+			int temp1 = 0;
+			int temp2 = 0;
+			char name[BUFF_SIZE];
+			char mess[BUFF_SIZE] = "DOWNLOAD ";
+			char zero[2] = " ";
+			strcpy_s(name, BUFF_SIZE, local_file);
+			strcat_s(mess, BUFF_SIZE, name);
+			strcat_s(mess, BUFF_SIZE, zero);
+			while ((fgets(data, BUFF_SIZE, FileIn) != NULL)) {
+				
+				
+				
+				strcat_s(mess, BUFF_SIZE, data);
+
+				
+			}
+			int ret = send_stream(conn, mess);
+			
+			if (ret == SOCKET_ERROR) {
+				printf_s("Error %d: Cannot send data.\n", WSAGetLastError());
+				return SERVER_FAIL;
+			}
+			
+			int k = recv_stream(conn, responseList);
+			for (string response : responseList)
+			{
+
+				if (stoi(response) == 80)
+				{
+					return SUCCESS_DOWNLOAD;
+				}
+			}
+			
+			bzero(mess, BUFF_SIZE);
+			bzero(name, BUFF_SIZE);
+			bzero(data, BUFF_SIZE);
+			
+		
+		}
+		else
+		{
+			return n;
 		}
 	}
 	
